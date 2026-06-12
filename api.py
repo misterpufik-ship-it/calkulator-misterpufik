@@ -26,12 +26,14 @@ from server import (
 
 def response(status: str, payload: dict):
   body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
-  print(f"Status: {status}")
-  print("Content-Type: application/json; charset=utf-8")
-  print(f"Content-Length: {len(body)}")
-  print("X-Robots-Tag: noindex, nofollow, noarchive")
-  print()
-  sys.stdout.buffer.write(body)
+  headers = (
+    f"Status: {status}\r\n"
+    "Content-Type: application/json; charset=utf-8\r\n"
+    f"Content-Length: {len(body)}\r\n"
+    "X-Robots-Tag: noindex, nofollow, noarchive\r\n"
+    "\r\n"
+  ).encode("utf-8")
+  sys.stdout.buffer.write(headers + body)
 
 
 def read_payload() -> dict:
