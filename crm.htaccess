@@ -7,6 +7,7 @@ DirectoryIndex index.html
 <IfModule mod_rewrite.c>
   RewriteEngine On
   RewriteRule ^api/(proposal|company-card|rental)$ api.py?action=$1 [L,QSA]
+  RewriteRule ^(server|avito_telegram_bridge)\.py$ - [F,L]
 </IfModule>
 
 Options +ExecCGI
@@ -15,3 +16,6 @@ AddHandler cgi-script .py
 <FilesMatch "^(\.env|\.git|.*\.pyc)$">
   Require all denied
 </FilesMatch>
+
+RedirectMatch 403 ^/crm/vendor/
+RedirectMatch 403 ^/crm/__pycache__/
