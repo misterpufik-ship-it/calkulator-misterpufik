@@ -279,6 +279,10 @@ function save(key, value) {
   localStorage.setItem(key, JSON.stringify(value));
 }
 
+function apiPath(path) {
+  return path.replace(/^\/+/, "");
+}
+
 function money(value) {
   return new Intl.NumberFormat("ru-RU", {
     style: "currency",
@@ -1226,7 +1230,7 @@ async function sendRentalOrder() {
   els.rentalStatus.textContent = "Сохраняю...";
   els.sendRentalOrder.disabled = true;
   try {
-    const response = await fetch("/api/rental", {
+    const response = await fetch(apiPath("/api/rental"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
@@ -1491,7 +1495,7 @@ async function createProposal() {
   els.createProposal.disabled = true;
   els.createProposal.textContent = "Формирую...";
   try {
-    const response = await fetch("/api/proposal", {
+    const response = await fetch(apiPath("/api/proposal"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
@@ -1689,7 +1693,7 @@ els.companyCard.addEventListener("click", async () => {
   els.companyCard.disabled = true;
   els.companyCard.textContent = "Формирую...";
   try {
-    const response = await fetch("/api/company-card", {
+    const response = await fetch(apiPath("/api/company-card"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),

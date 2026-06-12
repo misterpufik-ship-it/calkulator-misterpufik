@@ -1,0 +1,17 @@
+DirectoryIndex index.html
+
+<IfModule mod_headers.c>
+  Header set X-Robots-Tag "noindex, nofollow, noarchive"
+</IfModule>
+
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteRule ^api/(proposal|company-card|rental)$ api.py?action=$1 [L,QSA]
+</IfModule>
+
+Options +ExecCGI
+AddHandler cgi-script .py
+
+<FilesMatch "^(\.env|\.git|.*\.pyc)$">
+  Require all denied
+</FilesMatch>
