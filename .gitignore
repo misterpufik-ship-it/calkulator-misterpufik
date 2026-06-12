@@ -1,0 +1,8 @@
+source.xlsx
+screenshot.png
+brand.docx
+signature_stamp.docx
+outputs/
+__pycache__/
+.env
+.codex/

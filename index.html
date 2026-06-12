@@ -1,0 +1,553 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>AI-CRM система Misterpufik</title>
+    <link rel="stylesheet" href="styles.css?v=mister-pufik-b2b" />
+  </head>
+  <body>
+    <main class="app">
+      <header class="topbar">
+        <div class="brand-lockup">
+          <h1 class="brand-logo-text" aria-label="Mister Pufik B2B">
+            <span>MISTER</span>
+            <span>PUFIK</span>
+            <small>· B2B ·</small>
+          </h1>
+          <p>AI-CRM система Misterpufik</p>
+        </div>
+        <div class="summary-pill">
+          <span>Заказ</span>
+          <strong id="headerTotal">0 ₽</strong>
+        </div>
+      </header>
+
+      <nav class="tabs" aria-label="Разделы">
+        <button class="tab is-active" type="button" data-tab="calculator">Калькулятор</button>
+        <button class="tab" type="button" data-tab="settings">Значения</button>
+        <button class="tab" type="button" data-tab="company">Реквизиты</button>
+        <button class="tab" type="button" data-tab="history">Заказы</button>
+        <button class="tab" type="button" data-tab="crm">CRM</button>
+        <button class="tab" type="button" data-tab="rental">Аренда</button>
+        <button class="tab" type="button" data-tab="pl">P&amp;L</button>
+      </nav>
+
+      <section class="tab-panel is-active" id="calculator">
+        <div class="workspace">
+          <form class="panel form-panel" id="calcForm">
+            <div class="section-title">
+              <h2 id="positionTitle">Позиция 1</h2>
+              <div class="calc-summary">
+                <span id="liveCost">Себестоимость: 0 ₽</span>
+                <span id="liveProfit">Прибыль: 0 ₽</span>
+                <span id="livePrice">Цена: 0 ₽</span>
+              </div>
+            </div>
+
+            <div class="grid calc-grid">
+              <label class="calc-small-field">
+                Длина, см
+                <input id="length" type="number" min="1" step="0.1" value="49" required />
+              </label>
+              <label class="calc-small-field">
+                Ширина, см
+                <input id="width" type="number" min="1" step="0.1" value="49" required />
+              </label>
+              <label class="calc-small-field">
+                Высота, см
+                <input id="height" type="number" min="1" step="0.1" value="5" required />
+              </label>
+              <label class="calc-small-field">
+                Количество
+                <input id="quantity" type="number" min="1" step="1" value="1" required />
+              </label>
+              <label class="calc-type-field">
+                Тип подушки
+                <select id="pillowType"></select>
+              </label>
+              <label class="calc-foam-field" id="foamDensityField">
+                Плотность поролона
+                <select id="foamDensity">
+                  <option value="25" selected>25</option>
+                  <option value="30">30</option>
+                  <option value="35">35</option>
+                  <option value="40">40</option>
+                </select>
+              </label>
+              <label class="calc-fabric-field">
+                Цена ткани, ₽/м²
+                <input id="fabricPrice" type="number" min="0" step="1" value="600" />
+              </label>
+              <label class="calc-payment-field">
+                Форма оплаты
+                <select id="paymentType">
+                  <option value="cash">Наличка</option>
+                  <option value="cashless" selected>Безнал</option>
+                </select>
+              </label>
+              <label class="calc-logistics-field">
+                Логистика материала, ₽
+                <input id="materialLogistics" type="number" min="0" step="1" value="1000" />
+              </label>
+              <div class="calc-buttons-field" id="buttonsCountField">
+                <label>
+                  Пуговицы, шт
+                  <input id="buttonsCount" type="number" min="0" step="1" value="0" />
+                </label>
+              </div>
+            </div>
+
+            <div class="actions">
+              <button class="primary" type="submit" id="addItemButton">Добавить в заказ</button>
+              <button class="ghost" type="button" id="clearForm">Очистить позицию</button>
+              <button class="bee-button" type="button" id="beeButton" aria-haspopup="dialog">
+                <span class="bee-icon" aria-hidden="true">🐝</span>
+                <span>Я Пчелка Жу-Жу</span>
+              </button>
+            </div>
+
+            <details class="calc-breakdown">
+              <summary>Расчёт позиции</summary>
+              <dl class="breakdown" id="breakdown"></dl>
+            </details>
+          </form>
+
+          <aside class="panel options-panel">
+            <div class="section-title">
+              <h2>Опции</h2>
+            </div>
+            <fieldset>
+              <label class="check"><input id="coverOnly" type="checkbox" /> Только чехол</label>
+              <label class="check"><input id="leatherette" type="checkbox" /> Материал кожзам</label>
+              <label class="check"><input id="ties" type="checkbox" /> Завязки</label>
+              <label class="check"><input id="velcro" type="checkbox" /> Липучки</label>
+              <label class="check"><input id="hiddenZip" type="checkbox" /> Потайная молния</label>
+              <label class="check"><input id="decorStitch" type="checkbox" /> Декоративная отстрочка</label>
+              <label class="check"><input id="piping" type="checkbox" /> Канты</label>
+            </fieldset>
+          </aside>
+
+        </div>
+
+        <section class="panel order-panel">
+          <div class="section-title">
+            <h2>Заказ</h2>
+            <button class="danger" type="button" id="clearOrder">Очистить заказ</button>
+          </div>
+          <div class="order-meta">
+            <label>
+              Название заказа
+              <input id="orderTitle" type="text" placeholder="Например, подушки для кафе" />
+            </label>
+            <label>
+              Клиент
+              <input id="clientName" type="text" placeholder="ФИО или компания клиента" />
+            </label>
+            <label>
+              Срок изготовления
+              <input id="productionTerm" type="text" placeholder="Например, 10 рабочих дней" />
+            </label>
+            <label>
+              Стоимость доставки, ₽
+              <input id="deliveryAmount" type="number" min="0" step="1" value="0" />
+            </label>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th rowspan="2">Позиция</th>
+                  <th rowspan="2">Размер</th>
+                  <th rowspan="2">Кол-во</th>
+                  <th colspan="2">Пошив</th>
+                  <th colspan="2">Сборка</th>
+                  <th rowspan="2">НДС, 5%</th>
+                  <th rowspan="2">Цена</th>
+                  <th rowspan="2">Прибыль</th>
+                  <th rowspan="2">Итого</th>
+                  <th rowspan="2"></th>
+                </tr>
+                <tr>
+                  <th>за 1 шт</th>
+                  <th>итого</th>
+                  <th>за 1 шт</th>
+                  <th>итого</th>
+                </tr>
+              </thead>
+              <tbody id="orderBody"></tbody>
+            </table>
+          </div>
+          <div class="totals">
+            <div><span>Стоимость позиций</span><strong id="itemsTotal">0 ₽</strong></div>
+            <div><span>Доставка</span><strong id="deliveryTotal">0 ₽</strong></div>
+            <div><span>Прибыль</span><strong id="profitTotal">0 ₽</strong></div>
+            <div><span>Стоимость заказа</span><strong id="orderTotal">0 ₽</strong></div>
+          </div>
+          <div class="actions">
+            <button class="ghost" type="button" id="finalizeOrder">Итоговый расчёт</button>
+            <button class="ghost" type="button" id="saveManualCalc">Сохранить</button>
+            <button class="primary" type="button" id="createProposal">Оформить заказ</button>
+          </div>
+        </section>
+      </section>
+
+      <section class="tab-panel" id="settings">
+        <div class="settings-grid">
+          <section class="panel">
+            <div class="section-title">
+              <h2>Базовая стоимость пошива</h2>
+              <button class="ghost" type="button" id="addTier">Добавить порог</button>
+            </div>
+            <div id="tiersList" class="editor-list"></div>
+          </section>
+
+          <section class="panel">
+            <div class="section-title">
+              <h2>Коэффициенты типов</h2>
+              <button class="ghost" type="button" id="addType">Добавить тип</button>
+            </div>
+            <div id="typesList" class="editor-list"></div>
+          </section>
+
+          <section class="panel">
+            <h2>Цены и коэффициенты</h2>
+            <div class="grid compact" id="generalSettings"></div>
+          </section>
+
+          <section class="panel">
+            <h2>Логистика материалов</h2>
+            <div id="materialLogisticsList" class="editor-list"></div>
+          </section>
+
+          <section class="panel">
+            <h2>Коэффициенты опций</h2>
+            <div class="grid compact" id="optionCoeffList"></div>
+          </section>
+
+          <section class="panel">
+            <h2>Наценка по количеству</h2>
+            <div id="marginList" class="editor-list"></div>
+          </section>
+        </div>
+        <div class="settings-actions">
+          <button class="primary" type="button" id="saveSettings">Сохранить значения</button>
+          <button class="ghost" type="button" id="resetSettings">Вернуть из Excel</button>
+        </div>
+      </section>
+
+      <section class="tab-panel" id="company">
+        <div class="settings-grid">
+          <section class="panel">
+            <h2>Данные компании</h2>
+            <div class="grid compact company-fields">
+              <label>Название компании<input id="companyName" type="text" /></label>
+              <label>Телефон<input id="companyPhone" type="text" /></label>
+              <label>Email<input id="companyEmail" type="text" /></label>
+              <label>Сайт<input id="companySite" type="text" /></label>
+              <label class="wide">Адрес<input id="companyAddress" type="text" /></label>
+              <label class="wide">Реквизиты<textarea id="companyDetails" rows="8"></textarea></label>
+            </div>
+          </section>
+          <section class="panel">
+            <h2>Печать и подпись</h2>
+            <div class="grid compact company-fields">
+              <label>Имя руководителя<input id="signerName" type="text" /></label>
+              <label>Должность<input id="signerTitle" type="text" /></label>
+              <label class="wide">Печать и подпись<input id="stampFile" type="file" accept="image/*" /></label>
+            </div>
+            <div class="preview-row">
+              <img id="stampPreview" alt="Печать и подпись" />
+            </div>
+          </section>
+        </div>
+        <div class="settings-actions">
+          <button class="primary" type="button" id="saveCompany">Сохранить реквизиты</button>
+          <button class="ghost" type="button" id="companyCard">Карточка компании</button>
+        </div>
+      </section>
+
+      <section class="tab-panel" id="history">
+        <section class="panel">
+          <div class="section-title">
+            <h2>Заказы</h2>
+            <button class="danger" type="button" id="clearHistory">Очистить заказы</button>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Дата</th>
+                  <th>Номер</th>
+                  <th>Название</th>
+                  <th>Кол-во</th>
+                  <th>НДС, 5%</th>
+                  <th>Сумма</th>
+                  <th>Прибыль</th>
+                  <th>Документы</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="historyBody"></tbody>
+            </table>
+          </div>
+        </section>
+      </section>
+
+      <section class="tab-panel" id="crm">
+        <section class="panel">
+          <div class="section-title">
+            <h2>CRM</h2>
+            <span>Статистика по заказам</span>
+          </div>
+          <div class="totals crm-stats">
+            <div><span>Всего заказов</span><strong id="crmTotalOrders">0</strong></div>
+            <div><span>Выполнено</span><strong id="crmDoneOrders">0</strong></div>
+            <div><span>Оплачено</span><strong id="crmPaidOrders">0</strong></div>
+            <div><span>Прибыль всего</span><strong id="crmTotalProfit">0 ₽</strong></div>
+            <div><span>Прибыль оплачено</span><strong id="crmPaidProfit">0 ₽</strong></div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Дата</th>
+                  <th>Номер</th>
+                  <th>Тип заказа</th>
+                  <th>Позиций</th>
+                  <th>Прибыль</th>
+                  <th>Выполнен</th>
+                  <th>Оплачен</th>
+                </tr>
+              </thead>
+              <tbody id="crmBody"></tbody>
+            </table>
+          </div>
+        </section>
+      </section>
+
+      <section class="tab-panel" id="rental">
+        <div class="workspace">
+          <form class="panel form-panel" id="rentalForm">
+            <div class="section-title">
+              <h2>Аренда</h2>
+              <span id="rentalStatus">Google Таблица</span>
+            </div>
+            <div class="grid rental-grid">
+              <label>
+                Водитель
+                <select id="rentalDriver"></select>
+              </label>
+              <label>
+                Дата доставки
+                <input id="rentalStart" type="date" />
+              </label>
+              <div class="time-picker">
+                <span>Время доставки</span>
+                <div>
+                  <select id="rentalStartHour"></select>
+                  <select id="rentalStartMinute"></select>
+                </div>
+              </div>
+              <label>
+                Дата забора
+                <input id="rentalEnd" type="date" />
+              </label>
+              <div class="time-picker">
+                <span>Время забора</span>
+                <div>
+                  <select id="rentalEndHour"></select>
+                  <select id="rentalEndMinute"></select>
+                </div>
+              </div>
+              <label class="rental-driver-other is-hidden">
+                Другой водитель
+                <input id="rentalDriverOther" type="text" placeholder="Имя водителя" />
+              </label>
+              <label>
+                Дата оформления
+                <input id="rentalDate" type="date" />
+              </label>
+              <label>
+                Клиент
+                <input id="rentalClient" type="text" placeholder="ФИО или компания" />
+              </label>
+              <label>
+                Телефон
+                <input id="rentalPhone" type="text" placeholder="+7..." />
+              </label>
+              <label>
+                Статус
+                <select id="rentalStatusSelect">
+                  <option>Согласование</option>
+                  <option>Подтвержден</option>
+                  <option>Оплачен</option>
+                  <option>Отменен</option>
+                </select>
+              </label>
+              <label class="wide">
+                Комментарий
+                <input id="rentalComment" type="text" placeholder="Детали по аренде" />
+              </label>
+              <div class="wide rental-color-box">
+                <div class="section-title compact-title">
+                  <div>
+                    <span class="rental-item-label">Кресло Груша</span>
+                    <h3>Количество и цвета</h3>
+                  </div>
+                  <button class="ghost" type="button" id="addRentalColorLine">Добавить строку</button>
+                </div>
+                <div id="rentalColorLines" class="rental-color-lines"></div>
+              </div>
+            </div>
+            <div class="actions">
+              <button class="primary" type="submit">Сформировать заказ аренды</button>
+            </div>
+          </form>
+        </div>
+
+        <section class="panel order-panel">
+          <div class="section-title">
+            <h2>Заказ аренды</h2>
+            <button class="danger" type="button" id="clearRentalOrder">Очистить заказ</button>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Дата оформления</th>
+                  <th>Клиент</th>
+                  <th>Позиция</th>
+                  <th>Водитель</th>
+                  <th>Разбивка по цветам</th>
+                  <th>Кол-во</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="rentalOrderBody"></tbody>
+            </table>
+          </div>
+          <div class="totals">
+            <div><span>Общее количество</span><strong id="rentalOrderQuantity">0</strong></div>
+            <div><span>Разбивка по цветам</span><strong id="rentalOrderColorSummary">-</strong></div>
+          </div>
+          <div class="actions">
+            <button class="primary" type="button" id="sendRentalOrder">Сохранить заказ</button>
+          </div>
+        </section>
+
+        <section class="panel order-panel">
+          <div class="section-title">
+            <h2>Последние заказы аренды</h2>
+            <button class="danger" type="button" id="clearRentalRows">Очистить список</button>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Дата оформления</th>
+                  <th>Клиент</th>
+                  <th>Позиция</th>
+                  <th>Водитель</th>
+                  <th>Цвета</th>
+                  <th>Кол-во</th>
+                  <th>Статус</th>
+                </tr>
+              </thead>
+              <tbody id="rentalBody"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="panel order-panel">
+          <div class="section-title">
+            <h2>Webhook Google Таблицы</h2>
+            <button class="ghost" type="button" id="saveRentalWebhook">Сохранить webhook</button>
+          </div>
+          <label class="wide">
+            Webhook Google Таблицы
+            <input id="rentalWebhookUrl" type="url" placeholder="https://script.google.com/macros/s/.../exec" />
+          </label>
+        </section>
+
+        <section class="panel order-panel">
+          <h2>Как подключить</h2>
+          <ol class="setup-list">
+            <li>Откройте Google Таблицу.</li>
+            <li>Расширения → Apps Script.</li>
+            <li>Вставьте код из файла <strong>google-apps-script-rental.js</strong>.</li>
+            <li>Развернуть → Новое развертывание → Веб-приложение.</li>
+            <li>Доступ: “Все, у кого есть ссылка”.</li>
+            <li>Скопируйте URL и вставьте в поле webhook.</li>
+          </ol>
+        </section>
+
+        <section class="panel order-panel rental-drivers-panel">
+          <div class="section-title">
+            <h2>Водители</h2>
+          </div>
+          <div class="rental-driver-manager">
+            <label>
+              Новый водитель
+              <input id="newRentalDriver" type="text" placeholder="Имя водителя" />
+            </label>
+            <button class="ghost" type="button" id="addRentalDriver">Добавить</button>
+            <div class="driver-chip-list" id="rentalDriverList"></div>
+          </div>
+        </section>
+      </section>
+
+      <section class="tab-panel" id="pl">
+        <section class="panel">
+          <div class="section-title">
+            <h2>P&amp;L отчет</h2>
+            <span id="plPeriodTitle">Июль</span>
+          </div>
+          <div class="month-tabs" id="plMonthTabs"></div>
+          <div class="totals pl-kpis">
+            <div><span>Выручка</span><strong id="plRevenueTotal">0 ₽</strong></div>
+            <div><span>Валовая прибыль</span><strong id="plGrossProfit">0 ₽</strong></div>
+            <div><span>Расходы</span><strong id="plExpensesTotal">0 ₽</strong></div>
+            <div><span>Чистая прибыль</span><strong id="plNetProfit">0 ₽</strong></div>
+            <div><span>Рентабельность</span><strong id="plMargin">0%</strong></div>
+          </div>
+          <div class="table-wrap pl-table-wrap">
+            <table class="pl-table">
+              <tbody id="plReportBody"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="panel order-panel">
+          <div class="section-title">
+            <h2>Расходы</h2>
+            <button class="primary" type="button" id="savePlExpenses">Сохранить расходы</button>
+          </div>
+          <div class="pl-expense-add">
+            <label>
+              За что
+              <input id="newPlExpenseName" type="text" placeholder="Например, реклама" />
+            </label>
+            <label>
+              Сумма, ₽
+              <input id="newPlExpenseAmount" type="number" min="0" step="1" value="0" />
+            </label>
+            <button class="icon-btn pl-add-btn" type="button" id="addPlExpense" title="Добавить расход">+</button>
+          </div>
+          <div class="pl-expense-list" id="plExpensesList"></div>
+        </section>
+      </section>
+    </main>
+
+    <div class="bee-modal" id="beeModal" aria-hidden="true">
+      <div class="bee-card" role="dialog" aria-modal="true" aria-labelledby="beeModalTitle">
+        <button class="bee-close" type="button" id="beeClose" aria-label="Закрыть">×</button>
+        <div class="bee-hearts" aria-hidden="true">♡ ♡ ♡</div>
+        <h2 id="beeModalTitle">Гномик, я тебя обожаю</h2>
+        <div class="bee-hearts" aria-hidden="true">♡ ♡ ♡</div>
+      </div>
+    </div>
+
+    <script src="app.js"></script>
+  </body>
+</html>
