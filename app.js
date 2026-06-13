@@ -828,8 +828,8 @@ function renderHistory() {
       <td class="doc-links">
         ${item.docxUrl ? `<a class="link-btn doc-word" href="${item.docxUrl}" download data-history-link>КП</a>` : ""}
         ${item.pdfUrl ? `<a class="link-btn doc-pdf" href="${item.pdfUrl}" download data-history-link>КП</a>` : ""}
-        ${item.oksanaDocxUrl ? `<a class="link-btn doc-word" href="${item.oksanaDocxUrl}" download data-history-link>Оксана</a>` : ""}
-        ${item.oksanaPdfUrl ? `<a class="link-btn doc-pdf" href="${item.oksanaPdfUrl}" download data-history-link>Оксана</a>` : ""}
+        ${item.oksanaDocxUrl ? `<a class="link-btn doc-word" href="${item.oksanaDocxUrl}" download data-history-link>Пошив</a>` : ""}
+        ${item.oksanaPdfUrl ? `<a class="link-btn doc-pdf" href="${item.oksanaPdfUrl}" download data-history-link>Пошив</a>` : ""}
       </td>
       <td class="numeric">
         <button class="icon-btn" type="button" data-open-history-order="${index}" title="Открыть в калькуляторе">✎</button>

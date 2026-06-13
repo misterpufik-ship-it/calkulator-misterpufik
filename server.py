@@ -113,13 +113,15 @@ def image_or_fallback(data_url: str, fallback: Path | None = None) -> Path | Non
     return None
 
 
-def set_cell_text(cell, text: str, bold: bool = False):
+def set_cell_text(cell, text: str, bold: bool = False, size: float = 9, align=None):
     cell.text = ""
     paragraph = cell.paragraphs[0]
+    if align is not None:
+        paragraph.alignment = align
     run = paragraph.add_run(str(text))
     run.bold = bold
     run.font.name = "Arial"
-    run.font.size = Pt(9)
+    run.font.size = Pt(size)
     cell.vertical_alignment = WD_CELL_VERTICAL_ALIGNMENT.CENTER
 
 
@@ -285,14 +287,15 @@ def build_docx(payload: dict, output: Path):
     table = doc.add_table(rows=1, cols=7)
     table.alignment = WD_TABLE_ALIGNMENT.CENTER
     table.style = "Table Grid"
+    table.autofit = False
     set_table_borders(table, "D9DEE8")
-    widths = [Cm(0.8), Cm(4.8), Cm(2.7), Cm(2.8), Cm(1.3), Cm(2.1), Cm(2.4)]
-    headers = ["№", "Позиция", "Ткань", "Размер", "Кол-во", "НДС, 5%", "Стоимость"]
+    widths = [Cm(0.7), Cm(4.6), Cm(2.5), Cm(2.9), Cm(1.15), Cm(1.8), Cm(2.75)]
+    headers = ["№", "Позиция", "Ткань", "Размер", "Кол-\nво", "НДС,\n5%", "Стоимость"]
     for i, text in enumerate(headers):
-        set_cell_text(table.cell(0, i), text, True)
+        set_cell_text(table.cell(0, i), text, True, 8, WD_ALIGN_PARAGRAPH.CENTER)
         table.cell(0, i).width = widths[i]
         shade_cell(table.cell(0, i), BRAND_PURPLE_HEX)
-        set_cell_margins(table.cell(0, i), 120, 120, 120, 120)
+        set_cell_margins(table.cell(0, i), 90, 80, 90, 80)
         table.cell(0, i).paragraphs[0].runs[0].font.color.rgb = RGBColor(255, 255, 255)
     for row_index, line in enumerate(payload.get("lines", []), 1):
         row = table.add_row()
@@ -393,6 +396,8 @@ def build_pdf(payload: dict, output: Path):
     font = register_pdf_font()
     styles = getSampleStyleSheet()
     normal = ParagraphStyle("normal_ru", parent=styles["Normal"], fontName=font, fontSize=9, leading=12, textColor=colors.HexColor("#1c2730"))
+    table_text = ParagraphStyle("table_text", parent=normal, fontSize=8, leading=9.5, wordWrap="CJK")
+    table_header = ParagraphStyle("table_header", parent=normal, alignment=TA_CENTER, fontSize=7.2, leading=8.4, textColor=colors.white, wordWrap="CJK")
     right = ParagraphStyle("right_ru", parent=normal, alignment=TA_RIGHT, fontSize=15, leading=18, textColor=colors.HexColor("#9B49B4"))
     company = payload.get("company", {})
     doc = SimpleDocTemplate(str(output), pagesize=A4, rightMargin=1.45 * cm, leftMargin=1.45 * cm, topMargin=1.2 * cm, bottomMargin=1.2 * cm)
@@ -452,12 +457,28 @@ def build_pdf(payload: dict, output: Path):
     story.append(meta_table)
     story.append(Spacer(1, 0.35 * cm))
 
-    data = [["№", "Позиция", "Ткань", "Размер", "Кол-во", "НДС, 5%", "Стоимость"]]
+    data = [[
+        Paragraph("<b>№</b>", table_header),
+        Paragraph("<b>Позиция</b>", table_header),
+        Paragraph("<b>Ткань</b>", table_header),
+        Paragraph("<b>Размер</b>", table_header),
+        Paragraph("<b>Кол-<br/>во</b>", table_header),
+        Paragraph("<b>НДС,<br/>5%</b>", table_header),
+        Paragraph("<b>Стоимость</b>", table_header),
+    ]]
     for line in payload.get("lines", []):
-        data.append([line["index"], Paragraph(html.escape(line_title(line)), normal), Paragraph(html.escape(line_fabric(line)), normal), line["size"], line["quantity"], money(line.get("vatAmount", 0)), money(line["totalPrice"])])
+        data.append([
+            line["index"],
+            Paragraph(html.escape(line_title(line)), table_text),
+            Paragraph(html.escape(line_fabric(line)), table_text),
+            Paragraph(html.escape(str(line["size"])), table_text),
+            line["quantity"],
+            money(line.get("vatAmount", 0)),
+            money(line["totalPrice"]),
+        ])
     if float(payload.get("deliveryGrossAmount") or 0) > 0:
         data.append([len(payload.get("lines", [])) + 1, "Доставка", "", "", 1, money(payload.get("deliveryVat", 0)), money(payload["deliveryGrossAmount"])])
-    table = Table(data, colWidths=[0.75 * cm, 4.55 * cm, 2.55 * cm, 2.75 * cm, 1.3 * cm, 2.05 * cm, 2.95 * cm])
+    table = Table(data, colWidths=[0.65 * cm, 4.45 * cm, 2.45 * cm, 2.85 * cm, 1.1 * cm, 1.85 * cm, 2.65 * cm])
     table.setStyle(TableStyle([
         ("FONTNAME", (0, 0), (-1, -1), font),
         ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#9B49B4")),
@@ -467,10 +488,10 @@ def build_pdf(payload: dict, output: Path):
         ("ALIGN", (0, 0), (0, -1), "CENTER"),
         ("ALIGN", (3, 0), (-1, -1), "RIGHT"),
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-        ("TOPPADDING", (0, 0), (-1, -1), 8),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
-        ("LEFTPADDING", (0, 0), (-1, -1), 8),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+        ("TOPPADDING", (0, 0), (-1, -1), 6),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+        ("LEFTPADDING", (0, 0), (-1, -1), 5),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 5),
         ("FONTNAME", (0, 0), (-1, 0), font),
         ("FONTSIZE", (0, 0), (-1, 0), 9),
         ("FONTSIZE", (0, 1), (-1, -1), 9),
@@ -608,20 +629,22 @@ def oksana_rows(payload: dict) -> list[list[object]]:
 def build_oksana_docx(payload: dict, output: Path):
     doc = Document()
     style_doc(doc)
-    add_doc_paragraph(doc, f"Расчет Оксана № {payload['number']}", 16, True, WD_ALIGN_PARAGRAPH.CENTER, (20, 20, 20))
+    add_doc_paragraph(doc, f"Пошив № {payload['number']}", 16, True, WD_ALIGN_PARAGRAPH.CENTER, (20, 20, 20))
     add_doc_paragraph(doc, f"от {payload['date']}", 9, False, WD_ALIGN_PARAGRAPH.CENTER)
     add_doc_paragraph(doc, f"Заказ: {payload.get('title') or 'Заказ подушек'}", 10, True)
 
     table = doc.add_table(rows=1, cols=8)
     table.alignment = WD_TABLE_ALIGNMENT.CENTER
     table.style = "Table Grid"
+    table.autofit = False
     set_table_borders(table, "D9DEE8")
-    widths = [Cm(0.75), Cm(4.0), Cm(2.4), Cm(2.55), Cm(1.25), Cm(2.05), Cm(1.9), Cm(2.0)]
-    headers = ["№", "Позиция", "Ткань", "Размер", "Кол-во", "Пошив за 1 шт", "Сборка", "Сумма пошива"]
+    widths = [Cm(0.65), Cm(3.7), Cm(2.25), Cm(2.55), Cm(1.05), Cm(1.85), Cm(1.65), Cm(2.05)]
+    headers = ["№", "Позиция", "Ткань", "Размер", "Кол-\nво", "Пошив\nза 1 шт", "Сборка", "Сумма\nпошива"]
     for i, header in enumerate(headers):
-        set_cell_text(table.cell(0, i), header, True)
+        set_cell_text(table.cell(0, i), header, True, 7.5, WD_ALIGN_PARAGRAPH.CENTER)
         table.cell(0, i).width = widths[i]
         shade_cell(table.cell(0, i), "F1ECFF")
+        set_cell_margins(table.cell(0, i), 90, 70, 90, 70)
 
     total_sum = 0
     for row_data in oksana_rows(payload):
@@ -641,11 +664,13 @@ def build_oksana_pdf(payload: dict, output: Path):
     font = register_pdf_font()
     styles = getSampleStyleSheet()
     normal = ParagraphStyle("oksana_normal", parent=styles["Normal"], fontName=font, fontSize=9, leading=12, textColor=colors.HexColor("#1c2730"))
+    table_text = ParagraphStyle("oksana_table_text", parent=normal, fontSize=8, leading=9.5, wordWrap="CJK")
+    table_header = ParagraphStyle("oksana_table_header", parent=normal, alignment=TA_CENTER, fontSize=7.0, leading=8.2, wordWrap="CJK")
     title = ParagraphStyle("oksana_title", parent=normal, fontSize=16, leading=20, alignment=TA_CENTER, textColor=colors.HexColor("#141414"))
     right = ParagraphStyle("oksana_right", parent=normal, fontSize=12, leading=15, alignment=TA_RIGHT, textColor=colors.HexColor("#8A2BE2"))
     doc = SimpleDocTemplate(str(output), pagesize=A4, rightMargin=1.2 * cm, leftMargin=1.2 * cm, topMargin=1.2 * cm, bottomMargin=1.2 * cm)
     story = [
-        Paragraph(f"<b>Расчет Оксана № {html.escape(str(payload['number']))}</b>", title),
+        Paragraph(f"<b>Пошив № {html.escape(str(payload['number']))}</b>", title),
         Spacer(1, 0.12 * cm),
         Paragraph(f"от {html.escape(str(payload['date']))}", ParagraphStyle("oksana_date", parent=normal, alignment=TA_CENTER)),
         Spacer(1, 0.22 * cm),
@@ -653,21 +678,30 @@ def build_oksana_pdf(payload: dict, output: Path):
         Spacer(1, 0.28 * cm),
     ]
 
-    data = [["№", "Позиция", "Ткань", "Размер", "Кол-во", "Пошив за 1 шт", "Сборка", "Сумма пошива"]]
+    data = [[
+        Paragraph("<b>№</b>", table_header),
+        Paragraph("<b>Позиция</b>", table_header),
+        Paragraph("<b>Ткань</b>", table_header),
+        Paragraph("<b>Размер</b>", table_header),
+        Paragraph("<b>Кол-<br/>во</b>", table_header),
+        Paragraph("<b>Пошив<br/>за 1 шт</b>", table_header),
+        Paragraph("<b>Сборка</b>", table_header),
+        Paragraph("<b>Сумма<br/>пошива</b>", table_header),
+    ]]
     total_sum = 0
     for row in oksana_rows(payload):
         total_sum += float(row[7])
         data.append([
             row[0],
-            Paragraph(html.escape(str(row[1])), normal),
-            row[2],
-            row[3],
+            Paragraph(html.escape(str(row[1])), table_text),
+            Paragraph(html.escape(str(row[2])), table_text),
+            Paragraph(html.escape(str(row[3])), table_text),
             row[4],
             money(row[5]),
             money(row[6]),
             money(row[7]),
         ])
-    table = Table(data, colWidths=[0.7 * cm, 3.8 * cm, 2.25 * cm, 2.45 * cm, 1.15 * cm, 2.05 * cm, 1.75 * cm, 2.25 * cm])
+    table = Table(data, colWidths=[0.6 * cm, 3.55 * cm, 2.1 * cm, 2.45 * cm, 1.0 * cm, 1.85 * cm, 1.55 * cm, 2.0 * cm])
     table.setStyle(TableStyle([
         ("FONTNAME", (0, 0), (-1, -1), font),
         ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#F1ECFF")),
@@ -675,10 +709,10 @@ def build_oksana_pdf(payload: dict, output: Path):
         ("ALIGN", (0, 0), (0, -1), "CENTER"),
         ("ALIGN", (4, 0), (-1, -1), "RIGHT"),
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-        ("TOPPADDING", (0, 0), (-1, -1), 7),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 7),
-        ("LEFTPADDING", (0, 0), (-1, -1), 6),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+        ("TOPPADDING", (0, 0), (-1, -1), 6),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+        ("LEFTPADDING", (0, 0), (-1, -1), 4),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 4),
     ]))
     story.append(table)
     story.append(Spacer(1, 0.25 * cm))
@@ -689,7 +723,7 @@ def build_oksana_pdf(payload: dict, output: Path):
 def build_oksana_xlsx(payload: dict, output: Path):
     wb = Workbook()
     ws = wb.active
-    ws.title = "Расчет Оксана"
+    ws.title = "Пошив"
 
     purple = "8A2BE2"
     light = "F1ECFF"
@@ -700,7 +734,7 @@ def build_oksana_xlsx(payload: dict, output: Path):
         bottom=Side(style="thin", color="D9DEE8"),
     )
 
-    ws["A1"] = f"Расчет Оксана № {payload['number']}"
+    ws["A1"] = f"Пошив № {payload['number']}"
     ws["A1"].font = Font(name="Arial", size=16, bold=True, color=purple)
     ws.merge_cells("A1:H1")
     ws["A2"] = f"от {payload['date']}"
@@ -892,8 +926,8 @@ class Handler(SimpleHTTPRequestHandler):
         slug = safe_name(payload.get("number", datetime.now().strftime("%Y%m%d%H%M%S")))
         docx_path = OUTPUTS / f"kp_{slug}.docx"
         pdf_path = OUTPUTS / f"kp_{slug}.pdf"
-        oksana_docx_path = OUTPUTS / f"raschet_oksana_{slug}.docx"
-        oksana_pdf_path = OUTPUTS / f"raschet_oksana_{slug}.pdf"
+        oksana_docx_path = OUTPUTS / f"poshiv_{slug}.docx"
+        oksana_pdf_path = OUTPUTS / f"poshiv_{slug}.pdf"
         build_docx(payload, docx_path)
         build_pdf(payload, pdf_path)
         build_oksana_docx(payload, oksana_docx_path)

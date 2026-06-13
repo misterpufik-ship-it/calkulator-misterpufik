@@ -50,8 +50,8 @@ def handle_proposal(payload: dict):
   slug = safe_name(payload.get("number") or datetime.now().strftime("%Y%m%d%H%M%S"))
   docx_path = OUTPUTS / f"kp_{slug}.docx"
   pdf_path = OUTPUTS / f"kp_{slug}.pdf"
-  oksana_docx_path = OUTPUTS / f"raschet_oksana_{slug}.docx"
-  oksana_pdf_path = OUTPUTS / f"raschet_oksana_{slug}.pdf"
+  oksana_docx_path = OUTPUTS / f"poshiv_{slug}.docx"
+  oksana_pdf_path = OUTPUTS / f"poshiv_{slug}.pdf"
   build_docx(payload, docx_path)
   build_pdf(payload, pdf_path)
   build_oksana_docx(payload, oksana_docx_path)
