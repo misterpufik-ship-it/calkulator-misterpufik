@@ -69,6 +69,14 @@ def money(value: float) -> str:
     return f"{round(float(value)):,.0f}".replace(",", " ") + " ₽"
 
 
+def line_title(line: dict) -> str:
+    return str(line.get("positionName") or line.get("type") or "")
+
+
+def line_fabric(line: dict) -> str:
+    return str(line.get("fabricName") or "").strip()
+
+
 def production_term_text(value: str) -> str:
     value = str(value or "").strip()
     if not value:
@@ -274,12 +282,12 @@ def build_docx(payload: dict, output: Path):
     set_cell_margins(meta.cell(0, 0), 150, 220, 150, 220)
     set_cell_text(meta.cell(0, 0), f"Заказ: {payload.get('title') or 'Заказ подушек'}", True)
 
-    table = doc.add_table(rows=1, cols=6)
+    table = doc.add_table(rows=1, cols=7)
     table.alignment = WD_TABLE_ALIGNMENT.CENTER
     table.style = "Table Grid"
     set_table_borders(table, "D9DEE8")
-    widths = [Cm(1), Cm(6.4), Cm(3), Cm(1.7), Cm(2.4), Cm(3)]
-    headers = ["№", "Позиция", "Размер", "Кол-во", "НДС, 5%", "Стоимость"]
+    widths = [Cm(0.8), Cm(4.8), Cm(2.7), Cm(2.8), Cm(1.3), Cm(2.1), Cm(2.4)]
+    headers = ["№", "Позиция", "Ткань", "Размер", "Кол-во", "НДС, 5%", "Стоимость"]
     for i, text in enumerate(headers):
         set_cell_text(table.cell(0, i), text, True)
         table.cell(0, i).width = widths[i]
@@ -288,7 +296,7 @@ def build_docx(payload: dict, output: Path):
         table.cell(0, i).paragraphs[0].runs[0].font.color.rgb = RGBColor(255, 255, 255)
     for row_index, line in enumerate(payload.get("lines", []), 1):
         row = table.add_row()
-        values = [line["index"], line["type"], line["size"], line["quantity"], money(line.get("vatAmount", 0)), money(line["totalPrice"])]
+        values = [line["index"], line_title(line), line_fabric(line), line["size"], line["quantity"], money(line.get("vatAmount", 0)), money(line["totalPrice"])]
         for i, value in enumerate(values):
             set_cell_text(row.cells[i], value)
             row.cells[i].width = widths[i]
@@ -297,7 +305,7 @@ def build_docx(payload: dict, output: Path):
                 shade_cell(row.cells[i], SOFT_GRAY_HEX)
     if float(payload.get("deliveryGrossAmount") or 0) > 0:
         row = table.add_row()
-        values = [len(payload.get("lines", [])) + 1, "Доставка", "", 1, money(payload.get("deliveryVat", 0)), money(payload["deliveryGrossAmount"])]
+        values = [len(payload.get("lines", [])) + 1, "Доставка", "", "", 1, money(payload.get("deliveryVat", 0)), money(payload["deliveryGrossAmount"])]
         for i, value in enumerate(values):
             set_cell_text(row.cells[i], value, i == 1)
             row.cells[i].width = widths[i]
@@ -444,12 +452,12 @@ def build_pdf(payload: dict, output: Path):
     story.append(meta_table)
     story.append(Spacer(1, 0.35 * cm))
 
-    data = [["№", "Позиция", "Размер", "Кол-во", "НДС, 5%", "Стоимость"]]
+    data = [["№", "Позиция", "Ткань", "Размер", "Кол-во", "НДС, 5%", "Стоимость"]]
     for line in payload.get("lines", []):
-        data.append([line["index"], line["type"], line["size"], line["quantity"], money(line.get("vatAmount", 0)), money(line["totalPrice"])])
+        data.append([line["index"], Paragraph(html.escape(line_title(line)), normal), Paragraph(html.escape(line_fabric(line)), normal), line["size"], line["quantity"], money(line.get("vatAmount", 0)), money(line["totalPrice"])])
     if float(payload.get("deliveryGrossAmount") or 0) > 0:
-        data.append([len(payload.get("lines", [])) + 1, "Доставка", "", 1, money(payload.get("deliveryVat", 0)), money(payload["deliveryGrossAmount"])])
-    table = Table(data, colWidths=[0.85 * cm, 6.2 * cm, 2.85 * cm, 1.55 * cm, 2.25 * cm, 3.05 * cm])
+        data.append([len(payload.get("lines", [])) + 1, "Доставка", "", "", 1, money(payload.get("deliveryVat", 0)), money(payload["deliveryGrossAmount"])])
+    table = Table(data, colWidths=[0.75 * cm, 4.55 * cm, 2.55 * cm, 2.75 * cm, 1.3 * cm, 2.05 * cm, 2.95 * cm])
     table.setStyle(TableStyle([
         ("FONTNAME", (0, 0), (-1, -1), font),
         ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#9B49B4")),
@@ -586,7 +594,8 @@ def oksana_rows(payload: dict) -> list[list[object]]:
         assembly = float(line.get("assemblyTotal") or 0)
         rows.append([
             int(line.get("index") or len(rows) + 1),
-            line.get("type", ""),
+            line_title(line),
+            line_fabric(line),
             line.get("size", ""),
             quantity,
             unit,
@@ -603,12 +612,12 @@ def build_oksana_docx(payload: dict, output: Path):
     add_doc_paragraph(doc, f"от {payload['date']}", 9, False, WD_ALIGN_PARAGRAPH.CENTER)
     add_doc_paragraph(doc, f"Заказ: {payload.get('title') or 'Заказ подушек'}", 10, True)
 
-    table = doc.add_table(rows=1, cols=7)
+    table = doc.add_table(rows=1, cols=8)
     table.alignment = WD_TABLE_ALIGNMENT.CENTER
     table.style = "Table Grid"
     set_table_borders(table, "D9DEE8")
-    widths = [Cm(1), Cm(5.6), Cm(3), Cm(1.7), Cm(2.5), Cm(2.4), Cm(2.6)]
-    headers = ["№", "Позиция", "Размер", "Кол-во", "Пошив за 1 шт", "Сборка", "Сумма пошива"]
+    widths = [Cm(0.75), Cm(4.0), Cm(2.4), Cm(2.55), Cm(1.25), Cm(2.05), Cm(1.9), Cm(2.0)]
+    headers = ["№", "Позиция", "Ткань", "Размер", "Кол-во", "Пошив за 1 шт", "Сборка", "Сумма пошива"]
     for i, header in enumerate(headers):
         set_cell_text(table.cell(0, i), header, True)
         table.cell(0, i).width = widths[i]
@@ -617,8 +626,8 @@ def build_oksana_docx(payload: dict, output: Path):
     total_sum = 0
     for row_data in oksana_rows(payload):
         row = table.add_row()
-        total_sum += float(row_data[6])
-        values = [row_data[0], row_data[1], row_data[2], row_data[3], money(row_data[4]), money(row_data[5]), money(row_data[6])]
+        total_sum += float(row_data[7])
+        values = [row_data[0], row_data[1], row_data[2], row_data[3], row_data[4], money(row_data[5]), money(row_data[6]), money(row_data[7])]
         for i, value in enumerate(values):
             set_cell_text(row.cells[i], value, i == 1)
             row.cells[i].width = widths[i]
@@ -626,6 +635,55 @@ def build_oksana_docx(payload: dict, output: Path):
     total_p = add_doc_paragraph(doc, f"Итого по позициям: {money(total_sum)}", 12, True, WD_ALIGN_PARAGRAPH.RIGHT, (138, 43, 226))
     total_p.paragraph_format.space_before = Pt(10)
     doc.save(output)
+
+
+def build_oksana_pdf(payload: dict, output: Path):
+    font = register_pdf_font()
+    styles = getSampleStyleSheet()
+    normal = ParagraphStyle("oksana_normal", parent=styles["Normal"], fontName=font, fontSize=9, leading=12, textColor=colors.HexColor("#1c2730"))
+    title = ParagraphStyle("oksana_title", parent=normal, fontSize=16, leading=20, alignment=TA_CENTER, textColor=colors.HexColor("#141414"))
+    right = ParagraphStyle("oksana_right", parent=normal, fontSize=12, leading=15, alignment=TA_RIGHT, textColor=colors.HexColor("#8A2BE2"))
+    doc = SimpleDocTemplate(str(output), pagesize=A4, rightMargin=1.2 * cm, leftMargin=1.2 * cm, topMargin=1.2 * cm, bottomMargin=1.2 * cm)
+    story = [
+        Paragraph(f"<b>Расчет Оксана № {html.escape(str(payload['number']))}</b>", title),
+        Spacer(1, 0.12 * cm),
+        Paragraph(f"от {html.escape(str(payload['date']))}", ParagraphStyle("oksana_date", parent=normal, alignment=TA_CENTER)),
+        Spacer(1, 0.22 * cm),
+        Paragraph(f"<b>Заказ:</b> {html.escape(str(payload.get('title') or 'Заказ подушек'))}", normal),
+        Spacer(1, 0.28 * cm),
+    ]
+
+    data = [["№", "Позиция", "Ткань", "Размер", "Кол-во", "Пошив за 1 шт", "Сборка", "Сумма пошива"]]
+    total_sum = 0
+    for row in oksana_rows(payload):
+        total_sum += float(row[7])
+        data.append([
+            row[0],
+            Paragraph(html.escape(str(row[1])), normal),
+            row[2],
+            row[3],
+            row[4],
+            money(row[5]),
+            money(row[6]),
+            money(row[7]),
+        ])
+    table = Table(data, colWidths=[0.7 * cm, 3.8 * cm, 2.25 * cm, 2.45 * cm, 1.15 * cm, 2.05 * cm, 1.75 * cm, 2.25 * cm])
+    table.setStyle(TableStyle([
+        ("FONTNAME", (0, 0), (-1, -1), font),
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#F1ECFF")),
+        ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#D9DEE8")),
+        ("ALIGN", (0, 0), (0, -1), "CENTER"),
+        ("ALIGN", (4, 0), (-1, -1), "RIGHT"),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("TOPPADDING", (0, 0), (-1, -1), 7),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 7),
+        ("LEFTPADDING", (0, 0), (-1, -1), 6),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+    ]))
+    story.append(table)
+    story.append(Spacer(1, 0.25 * cm))
+    story.append(Paragraph(f"<b>Итого по позициям: {money(total_sum)}</b>", right))
+    doc.build(story)
 
 
 def build_oksana_xlsx(payload: dict, output: Path):
@@ -644,14 +702,14 @@ def build_oksana_xlsx(payload: dict, output: Path):
 
     ws["A1"] = f"Расчет Оксана № {payload['number']}"
     ws["A1"].font = Font(name="Arial", size=16, bold=True, color=purple)
-    ws.merge_cells("A1:G1")
+    ws.merge_cells("A1:H1")
     ws["A2"] = f"от {payload['date']}"
-    ws.merge_cells("A2:G2")
+    ws.merge_cells("A2:H2")
     ws["A3"] = f"Заказ: {payload.get('title') or 'Заказ подушек'}"
     ws["A3"].font = Font(name="Arial", size=11, bold=True)
-    ws.merge_cells("A3:G3")
+    ws.merge_cells("A3:H3")
 
-    headers = ["№", "Позиция", "Размер", "Кол-во", "Пошив за 1 шт", "Сборка", "Сумма пошива"]
+    headers = ["№", "Позиция", "Ткань", "Размер", "Кол-во", "Пошив за 1 шт", "Сборка", "Сумма пошива"]
     for col, header in enumerate(headers, 1):
         cell = ws.cell(row=5, column=col, value=header)
         cell.font = Font(name="Arial", size=10, bold=True)
@@ -661,22 +719,22 @@ def build_oksana_xlsx(payload: dict, output: Path):
 
     total_sum = 0
     for row_index, row_data in enumerate(oksana_rows(payload), 6):
-        total_sum += float(row_data[6])
+        total_sum += float(row_data[7])
         for col, value in enumerate(row_data, 1):
             cell = ws.cell(row=row_index, column=col, value=value)
             cell.font = Font(name="Arial", size=10, bold=(col == 2))
             cell.border = border
-            cell.alignment = Alignment(vertical="center", horizontal="right" if col in (4, 5, 6, 7) else "left")
-            if col in (5, 6, 7):
+            cell.alignment = Alignment(vertical="center", horizontal="right" if col in (5, 6, 7, 8) else "left")
+            if col in (6, 7, 8):
                 cell.number_format = '#,##0" ₽"'
 
     total_row = 6 + len(oksana_rows(payload))
-    ws.cell(row=total_row, column=6, value="Итого").font = Font(name="Arial", size=11, bold=True, color=purple)
-    total_cell = ws.cell(row=total_row, column=7, value=total_sum)
+    ws.cell(row=total_row, column=7, value="Итого").font = Font(name="Arial", size=11, bold=True, color=purple)
+    total_cell = ws.cell(row=total_row, column=8, value=total_sum)
     total_cell.font = Font(name="Arial", size=11, bold=True, color=purple)
     total_cell.number_format = '#,##0" ₽"'
 
-    widths = [8, 32, 18, 12, 16, 14, 16]
+    widths = [8, 28, 18, 18, 12, 16, 14, 16]
     for index, width in enumerate(widths, 1):
         ws.column_dimensions[get_column_letter(index)].width = width
     for row in range(1, total_row + 1):
@@ -835,16 +893,16 @@ class Handler(SimpleHTTPRequestHandler):
         docx_path = OUTPUTS / f"kp_{slug}.docx"
         pdf_path = OUTPUTS / f"kp_{slug}.pdf"
         oksana_docx_path = OUTPUTS / f"raschet_oksana_{slug}.docx"
-        oksana_xlsx_path = OUTPUTS / f"raschet_oksana_{slug}.xlsx"
+        oksana_pdf_path = OUTPUTS / f"raschet_oksana_{slug}.pdf"
         build_docx(payload, docx_path)
         build_pdf(payload, pdf_path)
         build_oksana_docx(payload, oksana_docx_path)
-        build_oksana_xlsx(payload, oksana_xlsx_path)
+        build_oksana_pdf(payload, oksana_pdf_path)
         self.send_json({
             "docxUrl": f"/outputs/proposals/{docx_path.name}",
             "pdfUrl": f"/outputs/proposals/{pdf_path.name}",
             "oksanaDocxUrl": f"/outputs/proposals/{oksana_docx_path.name}",
-            "oksanaXlsxUrl": f"/outputs/proposals/{oksana_xlsx_path.name}",
+            "oksanaPdfUrl": f"/outputs/proposals/{oksana_pdf_path.name}",
         })
 
     def translate_path(self, path):

@@ -18,7 +18,7 @@ from server import (
   build_company_card_pdf,
   build_docx,
   build_oksana_docx,
-  build_oksana_xlsx,
+  build_oksana_pdf,
   build_pdf,
   safe_name,
 )
@@ -51,16 +51,16 @@ def handle_proposal(payload: dict):
   docx_path = OUTPUTS / f"kp_{slug}.docx"
   pdf_path = OUTPUTS / f"kp_{slug}.pdf"
   oksana_docx_path = OUTPUTS / f"raschet_oksana_{slug}.docx"
-  oksana_xlsx_path = OUTPUTS / f"raschet_oksana_{slug}.xlsx"
+  oksana_pdf_path = OUTPUTS / f"raschet_oksana_{slug}.pdf"
   build_docx(payload, docx_path)
   build_pdf(payload, pdf_path)
   build_oksana_docx(payload, oksana_docx_path)
-  build_oksana_xlsx(payload, oksana_xlsx_path)
+  build_oksana_pdf(payload, oksana_pdf_path)
   response("200 OK", {
     "docxUrl": public_url(docx_path),
     "pdfUrl": public_url(pdf_path),
     "oksanaDocxUrl": public_url(oksana_docx_path),
-    "oksanaXlsxUrl": public_url(oksana_xlsx_path),
+    "oksanaPdfUrl": public_url(oksana_pdf_path),
   })
 
 

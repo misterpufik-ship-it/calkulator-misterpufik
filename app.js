@@ -111,6 +111,7 @@ const els = {
   pillowType: document.querySelector("#pillowType"),
   paymentType: document.querySelector("#paymentType"),
   fabricPrice: document.querySelector("#fabricPrice"),
+  fabricName: document.querySelector("#fabricName"),
   buttonsCountField: document.querySelector("#buttonsCountField"),
   buttonsCount: document.querySelector("#buttonsCount"),
   materialLogistics: document.querySelector("#materialLogistics"),
@@ -340,6 +341,7 @@ function currentInput() {
     type: els.pillowType.value,
     paymentType: els.paymentType.value,
     fabricPrice: Math.max(0, number(els.fabricPrice.value, settings.options.defaultFabricPrice)),
+    fabricName: els.fabricName.value.trim(),
     buttonsCount: Math.max(0, number(els.buttonsCount.value)),
     materialLogistics: Math.max(0, number(els.materialLogistics.value, defaultMaterialLogistics(els.pillowType.value))),
     coverOnly: els.coverOnly.checked,
@@ -474,6 +476,12 @@ function manualNumber(value, fallback) {
   return Number.isFinite(parsed) ? Math.max(0, parsed) : fallback;
 }
 
+function vatFromGross(gross, rate) {
+  const value = Math.max(0, number(gross));
+  const vatRate = Math.max(0, number(rate));
+  return vatRate > 0 ? value * vatRate / (1 + vatRate) : 0;
+}
+
 function applyManualOverrides(item, line) {
   const manual = item.manual || {};
   const quantity = Math.max(1, number(item.input.quantity, 1));
@@ -483,9 +491,9 @@ function applyManualOverrides(item, line) {
   const assemblyTotal = manualNumber(manual.assemblyTotal, assemblyPrice * quantity);
   const baseComponentCost = (line.result.sewing + line.result.assembly) * quantity;
   const finalCostBase = line.finalCost - baseComponentCost + sewingTotal + assemblyTotal;
-  const manualVat = manualNumber(manual.finalVat, line.finalVat);
   const totalFromUnit = Number.isFinite(Number(manual.unitPrice)) ? Math.max(0, Number(manual.unitPrice)) * quantity : null;
   const finalPrice = manualNumber(manual.finalPrice, totalFromUnit ?? line.finalPrice);
+  const manualVat = manualNumber(manual.finalVat, vatFromGross(finalPrice, item.result.vatRate));
   const finalProfit = manualNumber(manual.finalProfit, finalPrice - finalCostBase);
   const finalCost = Math.max(0, finalPrice - finalProfit);
   return {
@@ -538,6 +546,43 @@ function finalizedOrderLines() {
   });
 }
 
+function orderPayload(number = nextOrderNumber()) {
+  const meta = orderMeta();
+  const lines = finalizedOrderLines().map((item, index) => ({
+    index: index + 1,
+    type: item.input.type,
+    positionName: item.positionName || positionLabel(index),
+    fabricName: item.input.fabricName || "",
+    size: `${item.input.length} x ${item.input.width} x ${item.input.height} см`,
+    quantity: item.input.quantity,
+    unitPrice: item.finalPrice / item.input.quantity,
+    sewingPrice: item.sewingPrice,
+    sewingTotal: item.sewingTotal,
+    assemblyPrice: item.assemblyPrice,
+    assemblyTotal: item.assemblyTotal,
+    vatAmount: item.finalVat,
+    vatRate: item.result.vatRate,
+    costTotal: item.finalCost,
+    profit: item.finalProfit,
+    totalPrice: item.finalPrice,
+  }));
+  const delivery = deliverySummary();
+  return {
+    number,
+    date: todayRu(),
+    title: meta.title,
+    clientName: meta.clientName,
+    productionTerm: meta.productionTerm,
+    deliveryAmount: meta.deliveryAmount,
+    deliveryGrossAmount: delivery.gross,
+    deliveryVat: delivery.vat,
+    totalVat: lines.reduce((sum, item) => sum + item.vatAmount, 0) + delivery.vat,
+    total: lines.reduce((sum, item) => sum + item.totalPrice, 0) + delivery.gross,
+    lines,
+    company,
+  };
+}
+
 function materialLogisticsSummary() {
   const net = isFinalized
     ? order.reduce((sum, item) => sum + Math.max(0, number(item.input.materialLogistics, defaultMaterialLogistics(item.input.type))), 0)
@@ -580,7 +625,7 @@ function renderLive() {
     ["Поролон", money(result.foam)],
     ["Спандбонд", money(result.spunbond)],
     ["Синтепух", money(result.syntheticFluff)],
-    ["Ткань", money(result.fabric)],
+    ["Ткань", input.fabricName ? `${escapeHtml(input.fabricName)} · ${money(result.fabric)}` : money(result.fabric)],
     ["Пуговицы", money(result.buttons)],
     ["Логистика материала", money(input.materialLogistics)],
     ["Наценка", money(result.markup)],
@@ -634,9 +679,10 @@ function renderOrder() {
   } else {
     const rows = lines.map((item, index) => {
       const size = `${item.input.length} x ${item.input.width} x ${item.input.height} см`;
+      const fabricText = item.input.fabricName ? `<br><span class="muted-cell">Ткань: ${escapeHtml(item.input.fabricName)}</span>` : "";
       return `
         <tr data-other-unit-cost="${(item.finalCost - item.sewingTotal - item.assemblyTotal) / Math.max(1, number(item.input.quantity, 1))}">
-          <td><input class="table-input" type="text" value="${escapeHtml(item.positionName || positionLabel(index))}" data-order-edit="${index}" data-field="positionName"><br><span class="muted-cell">${escapeHtml(item.input.type)}</span></td>
+          <td><input class="table-input" type="text" value="${escapeHtml(item.positionName || positionLabel(index))}" data-order-edit="${index}" data-field="positionName"><br><span class="muted-cell">${escapeHtml(item.input.type)}</span>${fabricText}</td>
           <td>
             <div class="size-inputs">
               <input class="table-input" type="number" min="0" step="0.1" value="${item.input.length}" data-order-edit="${index}" data-field="length" aria-label="Длина">
@@ -771,7 +817,7 @@ function renderHistory() {
     return;
   }
   els.historyBody.innerHTML = history.map((item, index) => `
-    <tr>
+    <tr class="history-main-row" data-toggle-history="${index}">
       <td>${escapeHtml(item.date)}</td>
       <td>${escapeHtml(item.number)}</td>
       <td>${escapeHtml(item.title)}</td>
@@ -779,17 +825,199 @@ function renderHistory() {
       <td class="numeric">${money(item.vatAmount || 0)}</td>
       <td class="numeric">${money(item.total)}</td>
       <td class="numeric">${money(item.profit || 0)}</td>
-      <td>
-        ${item.docxUrl ? `<a class="link-btn" href="${item.docxUrl}" download>Word</a>` : ""}
-        ${item.pdfUrl ? `<a class="link-btn" href="${item.pdfUrl}" download>PDF</a>` : ""}
-        ${item.oksanaDocxUrl ? `<a class="link-btn" href="${item.oksanaDocxUrl}" download>Оксана Word</a>` : ""}
-        ${item.oksanaXlsxUrl ? `<a class="link-btn" href="${item.oksanaXlsxUrl}" download>Оксана Excel</a>` : ""}
+      <td class="doc-links">
+        ${item.docxUrl ? `<a class="link-btn doc-word" href="${item.docxUrl}" download data-history-link>КП</a>` : ""}
+        ${item.pdfUrl ? `<a class="link-btn doc-pdf" href="${item.pdfUrl}" download data-history-link>КП</a>` : ""}
+        ${item.oksanaDocxUrl ? `<a class="link-btn doc-word" href="${item.oksanaDocxUrl}" download data-history-link>Оксана</a>` : ""}
+        ${item.oksanaPdfUrl ? `<a class="link-btn doc-pdf" href="${item.oksanaPdfUrl}" download data-history-link>Оксана</a>` : ""}
       </td>
-      <td class="numeric"><button class="icon-btn" type="button" data-remove-history="${index}" title="Удалить заказ">×</button></td>
+      <td class="numeric">
+        <button class="icon-btn" type="button" data-open-history-order="${index}" title="Открыть в калькуляторе">✎</button>
+        <button class="icon-btn" type="button" data-remove-history="${index}" title="Удалить заказ">×</button>
+      </td>
+    </tr>
+    <tr class="history-detail-row" data-history-detail="${index}" hidden>
+      <td colspan="9">${renderHistoryDetails(item, index)}</td>
     </tr>
   `).join("");
   renderCrm();
   renderPl();
+}
+
+function renderHistoryDetails(item, historyIndex) {
+  const snapshot = Array.isArray(item.orderSnapshot) ? item.orderSnapshot : [];
+  if (!snapshot.length) {
+    return `<div class="history-detail-empty">Для старых заказов полный расчет не сохранен. Откройте заказ в калькуляторе и сформируйте заново.</div>`;
+  }
+  const rows = (item.payload?.lines || []).map((line, lineIndex) => `
+    <tr data-history-line="${lineIndex}">
+      <td>${escapeHtml(line.positionName || `Позиция ${lineIndex + 1}`)}<br><span class="muted-cell">${escapeHtml(line.type || "")}${line.fabricName ? ` · Ткань: ${escapeHtml(line.fabricName)}` : ""}</span></td>
+      <td>${escapeHtml(line.size || "")}</td>
+      <td class="numeric"><input class="table-input numeric-input" type="number" min="1" step="1" value="${line.quantity || 1}" data-history-edit="${historyIndex}" data-line="${lineIndex}" data-field="quantity"></td>
+      <td class="numeric"><input class="table-input numeric-input" type="number" min="0" step="1" value="${Math.round(line.sewingPrice || 0)}" data-history-edit="${historyIndex}" data-line="${lineIndex}" data-field="sewingPrice"></td>
+      <td class="numeric"><input class="table-input numeric-input" type="number" min="0" step="1" value="${Math.round(line.sewingTotal || 0)}" data-history-edit="${historyIndex}" data-line="${lineIndex}" data-field="sewingTotal"></td>
+      <td class="numeric"><input class="table-input numeric-input" type="number" min="0" step="1" value="${Math.round(line.assemblyPrice || 0)}" data-history-edit="${historyIndex}" data-line="${lineIndex}" data-field="assemblyPrice"></td>
+      <td class="numeric"><input class="table-input numeric-input" type="number" min="0" step="1" value="${Math.round(line.assemblyTotal || 0)}" data-history-edit="${historyIndex}" data-line="${lineIndex}" data-field="assemblyTotal"></td>
+      <td class="numeric"><input class="table-input numeric-input" type="number" min="0" step="1" value="${Math.round(line.vatAmount || 0)}" data-history-edit="${historyIndex}" data-line="${lineIndex}" data-field="vatAmount"></td>
+      <td class="numeric"><input class="table-input numeric-input" type="number" min="0" step="1" value="${Math.round((line.totalPrice || 0) / Math.max(1, number(line.quantity, 1)))}" data-history-edit="${historyIndex}" data-line="${lineIndex}" data-field="unitPrice"></td>
+      <td class="numeric"><input class="table-input numeric-input" type="number" min="0" step="1" value="${Math.round(line.profit || 0)}" data-history-edit="${historyIndex}" data-line="${lineIndex}" data-field="profit"></td>
+      <td class="numeric"><input class="table-input numeric-input" type="number" min="0" step="1" value="${Math.round(line.totalPrice || 0)}" data-history-edit="${historyIndex}" data-line="${lineIndex}" data-field="totalPrice"></td>
+    </tr>
+  `).join("");
+  return `
+    <div class="history-detail">
+      <div class="table-wrap">
+        <table class="history-calc-table">
+          <thead>
+            <tr>
+              <th>Позиция</th><th>Размер</th><th>Кол-во</th><th>Пошив за 1 шт</th><th>Пошив итог</th><th>Сборка за 1 шт</th><th>Сборка итог</th><th>НДС, 5%</th><th>Цена</th><th>Прибыль</th><th>Итого</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+      <div class="history-detail-actions">
+        <button class="ghost" type="button" data-open-history-order="${historyIndex}">Открыть в калькуляторе</button>
+        <button class="primary" type="button" data-save-history-order="${historyIndex}">Сохранить и обновить документы</button>
+      </div>
+    </div>
+  `;
+}
+
+function loadHistoryOrder(index) {
+  const item = history[index];
+  if (!item || !Array.isArray(item.orderSnapshot)) {
+    alert("У этого заказа нет сохраненного расчета для открытия.");
+    return;
+  }
+  order = clone(item.orderSnapshot);
+  const meta = item.meta || {};
+  els.orderTitle.value = meta.title || item.title || "";
+  els.clientName.value = meta.clientName || item.payload?.clientName || "";
+  els.productionTerm.value = meta.productionTerm || item.payload?.productionTerm || "";
+  els.deliveryAmount.value = number(meta.deliveryAmount, item.payload?.deliveryAmount || 0);
+  editingIndex = null;
+  isFinalized = true;
+  save("pillowCalcOrder", order);
+  renderOrder();
+  resetForm();
+  document.querySelector('[data-tab="calculator"]').click();
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+function updateHistoryLineTotals(input) {
+  const row = input.closest("tr");
+  if (!row) return;
+  const quantityInput = row.querySelector('[data-field="quantity"]');
+  const sewingPriceInput = row.querySelector('[data-field="sewingPrice"]');
+  const sewingTotalInput = row.querySelector('[data-field="sewingTotal"]');
+  const assemblyPriceInput = row.querySelector('[data-field="assemblyPrice"]');
+  const assemblyTotalInput = row.querySelector('[data-field="assemblyTotal"]');
+  const vatInput = row.querySelector('[data-field="vatAmount"]');
+  const unitInput = row.querySelector('[data-field="unitPrice"]');
+  const profitInput = row.querySelector('[data-field="profit"]');
+  const totalInput = row.querySelector('[data-field="totalPrice"]');
+  const historyIndex = Number(input.dataset.historyEdit);
+  const lineIndex = Number(input.dataset.line);
+  const item = history[historyIndex];
+  const sourceLine = item?.payload?.lines?.[lineIndex] || {};
+  const quantity = Math.max(1, number(quantityInput?.value, 1));
+
+  if (input.dataset.field === "sewingPrice" || input.dataset.field === "quantity") {
+    sewingTotalInput.value = Math.round(Math.max(0, number(sewingPriceInput.value)) * quantity);
+  }
+  if (input.dataset.field === "sewingTotal") {
+    sewingPriceInput.value = Math.round(Math.max(0, number(sewingTotalInput.value)) / quantity);
+  }
+  if (input.dataset.field === "assemblyPrice" || input.dataset.field === "quantity") {
+    assemblyTotalInput.value = Math.round(Math.max(0, number(assemblyPriceInput.value)) * quantity);
+  }
+  if (input.dataset.field === "assemblyTotal") {
+    assemblyPriceInput.value = Math.round(Math.max(0, number(assemblyTotalInput.value)) / quantity);
+  }
+  if (input.dataset.field === "unitPrice" || input.dataset.field === "quantity") {
+    totalInput.value = Math.round(Math.max(0, number(unitInput.value)) * quantity);
+  }
+  if (input.dataset.field === "totalPrice") {
+    unitInput.value = Math.round(Math.max(0, number(totalInput.value)) / quantity);
+  }
+  if (["unitPrice", "quantity", "totalPrice"].includes(input.dataset.field)) {
+    vatInput.value = Math.round(vatFromGross(number(totalInput.value), sourceLine.vatRate));
+  }
+  if (["sewingPrice", "sewingTotal", "assemblyPrice", "assemblyTotal", "unitPrice", "quantity", "totalPrice"].includes(input.dataset.field)) {
+    const costTotal = Math.max(0, number(sourceLine.costTotal));
+    profitInput.value = Math.max(0, Math.round(number(totalInput.value) - costTotal));
+  }
+}
+
+function readHistoryDetailInputs(historyIndex) {
+  const item = history[historyIndex];
+  if (!item?.payload?.lines) return false;
+  document.querySelectorAll(`[data-history-edit="${historyIndex}"]`).forEach((input) => {
+    const line = item.payload.lines[Number(input.dataset.line)];
+    if (!line) return;
+    const field = input.dataset.field;
+    if (field === "unitPrice") return;
+    line[field] = Math.max(field === "quantity" ? 1 : 0, number(input.value, line[field]));
+  });
+  item.payload.lines.forEach((line, index) => {
+    const snapshot = item.orderSnapshot?.[index];
+    if (snapshot) {
+      snapshot.input.quantity = Math.max(1, number(line.quantity, snapshot.input.quantity));
+      snapshot.manual = {
+        ...(snapshot.manual || {}),
+        sewingPrice: line.sewingPrice,
+        sewingTotal: line.sewingTotal,
+        assemblyPrice: line.assemblyPrice,
+        assemblyTotal: line.assemblyTotal,
+        finalVat: line.vatAmount,
+        unitPrice: line.totalPrice / Math.max(1, number(line.quantity, 1)),
+        finalProfit: line.profit,
+        finalPrice: line.totalPrice,
+      };
+    }
+  });
+  item.quantity = item.payload.lines.reduce((sum, line) => sum + number(line.quantity), 0);
+  item.positionsCount = item.payload.lines.length;
+  item.vatAmount = item.payload.lines.reduce((sum, line) => sum + number(line.vatAmount), 0) + number(item.payload.deliveryVat);
+  item.total = item.payload.lines.reduce((sum, line) => sum + number(line.totalPrice), 0) + number(item.payload.deliveryGrossAmount);
+  item.profit = item.payload.lines.reduce((sum, line) => sum + number(line.profit), 0);
+  item.payload.totalVat = item.vatAmount;
+  item.payload.total = item.total;
+  return true;
+}
+
+async function saveHistoryOrder(index) {
+  if (!readHistoryDetailInputs(index)) return;
+  const item = history[index];
+  const button = document.querySelector(`[data-save-history-order="${index}"]`);
+  if (button) {
+    button.disabled = true;
+    button.textContent = "Сохраняю...";
+  }
+  try {
+    const response = await fetch(apiPath("/api/proposal"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(item.payload),
+    });
+    if (!response.ok) throw new Error(await response.text());
+    const docs = await response.json();
+    item.docxUrl = docs.docxUrl;
+    item.pdfUrl = docs.pdfUrl;
+    item.oksanaDocxUrl = docs.oksanaDocxUrl;
+    item.oksanaPdfUrl = docs.oksanaPdfUrl;
+    delete item.oksanaXlsxUrl;
+    save("pillowCalcHistory", history);
+    renderHistory();
+  } catch (error) {
+    alert(`Не получилось обновить документы: ${error.message}`);
+  } finally {
+    if (button) {
+      button.disabled = false;
+      button.textContent = "Сохранить и обновить документы";
+    }
+  }
 }
 
 function renderCrm() {
@@ -1287,6 +1515,7 @@ function setFormInput(input) {
   els.pillowType.value = input.type;
   els.paymentType.value = input.paymentType;
   els.fabricPrice.value = input.fabricPrice;
+  els.fabricName.value = input.fabricName || "";
   els.buttonsCount.value = input.buttonsCount;
   els.materialLogistics.value = number(input.materialLogistics, defaultMaterialLogistics(input.type));
   els.coverOnly.checked = input.coverOnly;
@@ -1312,6 +1541,7 @@ function resetForm() {
     type: settings.types[0]?.name || "",
     paymentType: "cashless",
     fabricPrice: settings.options.defaultFabricPrice,
+    fabricName: "",
     buttonsCount: 0,
     materialLogistics: defaultMaterialLogistics(settings.types[0]?.name || ""),
     coverOnly: false,
@@ -1351,10 +1581,13 @@ function syncOrderEditTotals(input) {
   const sewingTotalInput = row.querySelector('[data-field="sewingTotal"]');
   const assemblyPriceInput = row.querySelector('[data-field="assemblyPrice"]');
   const assemblyTotalInput = row.querySelector('[data-field="assemblyTotal"]');
+  const vatInput = row.querySelector('[data-field="finalVat"]');
   const unitInput = row.querySelector('[data-field="unitPrice"]');
   const totalInput = row.querySelector('[data-field="finalPrice"]');
   const profitInput = row.querySelector('[data-field="finalProfit"]');
   const quantity = Math.max(1, number(quantityInput?.value, 1));
+  const index = Number(input.dataset.orderEdit);
+  const vatRate = order[index]?.result?.vatRate || calculate(order[index]?.input || currentInput()).vatRate;
 
   if (input.dataset.field === "sewingPrice" || input.dataset.field === "quantity") {
     sewingTotalInput.value = Math.round(Math.max(0, number(sewingPriceInput.value)) * quantity);
@@ -1373,6 +1606,9 @@ function syncOrderEditTotals(input) {
   }
   if (input.dataset.field === "finalPrice") {
     unitInput.value = Math.round(Math.max(0, number(totalInput.value)) / quantity);
+  }
+  if (["unitPrice", "quantity", "finalPrice"].includes(input.dataset.field)) {
+    vatInput.value = Math.round(vatFromGross(number(totalInput.value), vatRate));
   }
   if (["sewingPrice", "sewingTotal", "assemblyPrice", "assemblyTotal", "unitPrice", "quantity", "finalPrice"].includes(input.dataset.field)) {
     const lineCost =
@@ -1458,39 +1694,8 @@ async function createProposal() {
   saveManualCalculation({ silent: true });
   isFinalized = true;
   renderOrder();
-  const meta = orderMeta();
   const number = nextOrderNumber();
-  const lines = finalizedOrderLines().map((item, index) => ({
-    index: index + 1,
-    type: item.input.type,
-    size: `${item.input.length} x ${item.input.width} x ${item.input.height} см`,
-    quantity: item.input.quantity,
-    unitPrice: item.finalPrice / item.input.quantity,
-    sewingPrice: item.sewingPrice,
-    sewingTotal: item.sewingTotal,
-    assemblyPrice: item.assemblyPrice,
-    assemblyTotal: item.assemblyTotal,
-    vatAmount: item.finalVat,
-    vatRate: item.result.vatRate,
-    costTotal: item.finalCost,
-    profit: item.finalProfit,
-    totalPrice: item.finalPrice,
-  }));
-  const delivery = deliverySummary();
-  const payload = {
-    number,
-    date: todayRu(),
-    title: meta.title,
-    clientName: meta.clientName,
-    productionTerm: meta.productionTerm,
-    deliveryAmount: meta.deliveryAmount,
-    deliveryGrossAmount: delivery.gross,
-    deliveryVat: delivery.vat,
-    totalVat: lines.reduce((sum, item) => sum + item.vatAmount, 0) + delivery.vat,
-    total: lines.reduce((sum, item) => sum + item.totalPrice, 0) + delivery.gross,
-    lines,
-    company,
-  };
+  const payload = orderPayload(number);
 
   els.createProposal.disabled = true;
   els.createProposal.textContent = "Формирую...";
@@ -1505,18 +1710,22 @@ async function createProposal() {
     const historyItem = {
       number,
       date: payload.date,
-      title: meta.title,
+      title: payload.title,
       quantity: order.reduce((sum, item) => sum + item.input.quantity, 0),
-      positionsCount: lines.length,
+      positionsCount: payload.lines.length,
       vatAmount: payload.totalVat,
       total: payload.total,
-      profit: lines.reduce((sum, item) => sum + item.profit, 0),
+      profit: payload.lines.reduce((sum, item) => sum + item.profit, 0),
       done: false,
       paid: false,
       docxUrl: docs.docxUrl,
       pdfUrl: docs.pdfUrl,
       oksanaDocxUrl: docs.oksanaDocxUrl,
-      oksanaXlsxUrl: docs.oksanaXlsxUrl,
+      oksanaPdfUrl: docs.oksanaPdfUrl,
+      payload,
+      orderSnapshot: clone(order),
+      meta: orderMeta(),
+      isFinalized: true,
     };
     history.unshift(historyItem);
     save("pillowCalcHistory", history);
@@ -1728,11 +1937,36 @@ els.clearHistory.addEventListener("click", () => {
 });
 
 els.historyBody.addEventListener("click", (event) => {
-  const button = event.target.closest("[data-remove-history]");
-  if (!button) return;
-  history.splice(Number(button.dataset.removeHistory), 1);
-  save("pillowCalcHistory", history);
-  renderHistory();
+  if (event.target.closest("[data-history-link]")) return;
+  const removeButton = event.target.closest("[data-remove-history]");
+  const openButton = event.target.closest("[data-open-history-order]");
+  const saveButton = event.target.closest("[data-save-history-order]");
+  const row = event.target.closest("[data-toggle-history]");
+
+  if (removeButton) {
+    history.splice(Number(removeButton.dataset.removeHistory), 1);
+    save("pillowCalcHistory", history);
+    renderHistory();
+    return;
+  }
+  if (openButton) {
+    loadHistoryOrder(Number(openButton.dataset.openHistoryOrder));
+    return;
+  }
+  if (saveButton) {
+    saveHistoryOrder(Number(saveButton.dataset.saveHistoryOrder));
+    return;
+  }
+  if (row) {
+    const detail = els.historyBody.querySelector(`[data-history-detail="${row.dataset.toggleHistory}"]`);
+    if (detail) detail.hidden = !detail.hidden;
+  }
+});
+
+els.historyBody.addEventListener("input", (event) => {
+  const input = event.target.closest("[data-history-edit]");
+  if (!input) return;
+  updateHistoryLineTotals(input);
 });
 
 els.crmBody.addEventListener("change", (event) => {

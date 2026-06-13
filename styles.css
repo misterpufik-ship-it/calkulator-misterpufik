@@ -28,6 +28,7 @@ body {
   background: var(--bg);
   color: var(--text);
   font-family: "Segoe UI", Arial, sans-serif;
+  overflow-x: hidden;
 }
 
 button,
@@ -41,6 +42,7 @@ textarea {
   width: min(1440px, calc(100% - 32px));
   margin: 0 auto;
   padding: 24px 0 40px;
+  min-width: 0;
 }
 
 .topbar {
@@ -184,6 +186,7 @@ h2 {
   grid-template-columns: minmax(0, 1.45fr) minmax(320px, 0.75fr);
   gap: 16px;
   align-items: stretch;
+  min-width: 0;
 }
 
 #calculator .workspace {
@@ -196,6 +199,7 @@ h2 {
   border-radius: 8px;
   padding: 18px;
   box-shadow: var(--shadow);
+  min-width: 0;
 }
 
 .form-panel,
@@ -260,6 +264,10 @@ button {
 }
 
 .calc-type-field {
+  grid-column: span 2;
+}
+
+.calc-fabric-name-field {
   grid-column: span 2;
 }
 
@@ -580,6 +588,8 @@ button {
 
 .table-wrap {
   overflow-x: auto;
+  max-width: 100%;
+  -webkit-overflow-scrolling: touch;
 }
 
 table {
@@ -676,50 +686,76 @@ th.numeric {
   gap: 16px;
 }
 
+#settings .panel {
+  padding: 16px;
+}
+
+#settings .section-title {
+  margin-bottom: 12px;
+}
+
 .editor-list {
   display: grid;
-  gap: 10px;
+  gap: 8px;
 }
 
 .editor-row {
   display: grid;
-  grid-template-columns: 1fr 1fr auto;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 38px;
   gap: 8px;
   align-items: end;
 }
 
 .editor-row.type-row {
-  grid-template-columns: minmax(220px, 1.35fr) minmax(90px, 0.5fr) minmax(110px, 0.55fr) 42px;
+  grid-template-columns: minmax(150px, 1.35fr) minmax(74px, 0.48fr) minmax(86px, 0.56fr) 38px;
 }
 
 .editor-row.margin-row {
-  grid-template-columns: 1fr 1fr auto;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 38px;
 }
 
 .editor-row.logistics-base-row,
 .editor-row.logistics-row {
-  grid-template-columns: minmax(220px, 1fr) minmax(120px, 0.45fr) minmax(110px, 0.35fr);
+  grid-template-columns: minmax(130px, 1fr) minmax(74px, 0.45fr) minmax(76px, 0.35fr);
+}
+
+#settings label {
+  gap: 5px;
+  font-size: 12px;
+}
+
+#settings input,
+#settings select {
+  min-height: 38px;
+  padding: 7px 9px;
 }
 
 .readonly-label,
 .amount-preview {
-  min-height: 42px;
+  min-height: 38px;
   display: flex;
   align-items: center;
+  min-width: 0;
 }
 
 .readonly-label {
   color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .amount-preview {
   justify-content: flex-end;
   color: var(--muted);
+  font-size: 13px;
   font-weight: 700;
+  white-space: nowrap;
 }
 
 .icon-btn {
-  width: 42px;
+  width: 38px;
+  min-height: 38px;
   padding: 0;
   border-color: var(--line);
   background: white;
@@ -735,6 +771,7 @@ th.numeric {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  gap: 6px;
   min-height: 36px;
   border-radius: 8px;
   border: 1px solid #9faf9f;
@@ -748,6 +785,68 @@ th.numeric {
 
 .link-btn:hover {
   background: var(--accent-soft);
+}
+
+.link-btn::before {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 27px;
+  height: 22px;
+  border-radius: 5px;
+  color: white;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.doc-word::before {
+  content: "W";
+  background: #2b579a;
+}
+
+.doc-pdf::before {
+  content: "PDF";
+  background: #c62828;
+}
+
+.history-main-row {
+  cursor: pointer;
+}
+
+.history-main-row:hover td {
+  background: #fbfdf9;
+}
+
+.doc-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.history-detail-row > td {
+  background: #fbfdf9;
+  padding: 14px;
+}
+
+.history-detail {
+  display: grid;
+  gap: 12px;
+}
+
+.history-calc-table {
+  min-width: 1280px;
+}
+
+.history-detail-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.history-detail-empty {
+  color: var(--muted);
+  padding: 12px;
 }
 
 .company-fields {
@@ -995,6 +1094,7 @@ th.numeric {
 
 @media (max-width: 980px) {
   .workspace,
+  #calculator .workspace,
   .settings-grid {
     grid-template-columns: 1fr;
   }
@@ -1014,37 +1114,78 @@ th.numeric {
 
 @media (max-width: 640px) {
   .app {
-    width: min(100% - 20px, 1440px);
-    padding-top: 14px;
+    width: 100%;
+    padding: 10px 10px 28px;
   }
 
   .topbar {
-    align-items: stretch;
-    grid-template-columns: 1fr;
-    padding: 20px 16px;
+    align-items: center;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 10px;
+    margin-bottom: 12px;
+    padding: 12px;
   }
 
   .brand-lockup {
     grid-column: 1;
-    align-items: center;
-    flex-direction: column;
-    justify-self: center;
-    gap: 12px;
+    align-items: flex-start;
+    justify-self: stretch;
+    gap: 5px;
+    text-align: left;
   }
 
   .summary-pill {
-    grid-column: 1;
-    justify-self: stretch;
+    grid-column: 2;
+    justify-self: end;
+    min-width: 118px;
+    padding: 9px 10px;
   }
 
   .brand-logo-text {
-    font-size: 30px;
-    text-align: center;
+    font-size: 22px;
+    line-height: 0.92;
+    text-align: left;
   }
 
   .topbar p {
-    text-align: center;
-    max-width: none;
+    max-width: 170px;
+    font-size: 12px;
+    line-height: 1.25;
+  }
+
+  .summary-pill span {
+    font-size: 11px;
+  }
+
+  .summary-pill strong {
+    font-size: 20px;
+  }
+
+  .tabs {
+    gap: 6px;
+    margin: 0 0 12px;
+    padding: 0 0 4px;
+  }
+
+  .tab {
+    min-height: 40px;
+    padding: 8px 13px;
+    font-size: 15px;
+  }
+
+  .workspace,
+  #calculator .workspace {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+  }
+
+  .panel {
+    padding: 14px;
+  }
+
+  .form-panel,
+  .options-panel {
+    height: auto;
   }
 
   .grid,
@@ -1057,6 +1198,7 @@ th.numeric {
   .crm-stats,
   .pl-kpis {
     grid-template-columns: 1fr;
+    gap: 10px;
   }
 
   .calc-type-field {
@@ -1070,13 +1212,183 @@ th.numeric {
   .section-title {
     align-items: flex-start;
     flex-direction: column;
+    gap: 10px;
+    margin-bottom: 12px;
+  }
+
+  #calculator .section-title {
+    align-items: stretch;
+  }
+
+  .calc-summary {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 8px;
+    width: 100%;
+  }
+
+  .calc-summary span {
+    min-width: 0;
+    padding: 8px 10px;
+    font-size: 13px;
+  }
+
+  label {
+    gap: 5px;
+    font-size: 12px;
+  }
+
+  input,
+  select,
+  textarea,
+  button {
+    min-height: 40px;
+  }
+
+  #calculator input,
+  #calculator select {
+    min-height: 38px;
+  }
+
+  fieldset {
+    margin-top: 12px;
+    padding: 12px;
+  }
+
+  .options-panel fieldset {
+    gap: 12px;
+  }
+
+  .check {
+    min-height: 34px;
+    gap: 10px;
+    font-size: 14px;
+  }
+
+  .check input {
+    flex: 0 0 18px;
+  }
+
+  .actions,
+  .settings-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 8px;
+    margin-top: 14px;
+  }
+
+  .bee-button {
+    white-space: normal;
+  }
+
+  .order-panel {
+    margin-top: 12px;
+  }
+
+  .totals strong {
+    font-size: 18px;
+  }
+
+  .rental-driver-manager,
+  .rental-color-row,
+  .time-picker div,
+  .pl-expense-add,
+  .pl-expense-row {
+    grid-template-columns: 1fr;
+  }
+
+  #settings .panel {
+    padding: 14px;
+  }
+
+  #settings .section-title {
+    gap: 10px;
+    margin-bottom: 12px;
+  }
+
+  #settings .section-title .ghost {
+    min-height: 38px;
+    padding: 7px 11px;
+  }
+
+  #settings .editor-row {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 36px;
+    gap: 6px;
+  }
+
+  #settings .editor-row.type-row {
+    grid-template-columns: minmax(112px, 1.2fr) minmax(62px, 0.55fr) minmax(72px, 0.65fr) 36px;
+  }
+
+  #settings .editor-row.margin-row {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 36px;
+  }
+
+  #settings .editor-row.logistics-base-row,
+  #settings .editor-row.logistics-row {
+    grid-template-columns: minmax(104px, 1fr) minmax(62px, 0.52fr) minmax(68px, 0.5fr);
+  }
+
+  #settings label {
+    font-size: 11px;
+  }
+
+  #settings input,
+  #settings select {
+    min-height: 36px;
+    padding: 6px 8px;
+  }
+
+  #settings .readonly-label,
+  #settings .amount-preview,
+  #settings .icon-btn {
+    min-height: 36px;
+  }
+
+  #settings .icon-btn {
+    width: 36px;
+  }
+}
+
+@media (max-width: 420px) {
+  .app {
+    padding-inline: 8px;
+  }
+
+  .panel {
+    padding: 12px;
+  }
+
+  .brand-logo-text {
+    font-size: 23px;
+  }
+
+  .summary-pill strong {
+    font-size: 20px;
+  }
+
+  h2 {
+    font-size: 17px;
+  }
+
+  .tab {
+    padding-inline: 11px;
+  }
+}
+
+@media (max-width: 380px) {
+  #settings .editor-row.type-row,
+  #settings .editor-row.logistics-base-row,
+  #settings .editor-row.logistics-row {
+    grid-template-columns: 1fr;
+  }
+
+  #settings .editor-row.type-row .icon-btn {
+    width: 100%;
   }
 
   .editor-row,
-  .editor-row.type-row,
   .editor-row.margin-row,
-  .editor-row.logistics-base-row,
-  .editor-row.logistics-row,
   .rental-driver-manager,
   .rental-color-row,
   .time-picker div,
