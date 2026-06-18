@@ -1,4 +1,26 @@
 ﻿const defaultSettings = {
+  assemblyTiers: {
+    foam: [
+      { max: 10, price: 100 },
+      { max: 50, price: 80 },
+      { max: 1000, price: 70 },
+    ],
+    sintepon: [
+      { max: 10, price: 200 },
+      { max: 50, price: 170 },
+      { max: 1000, price: 150 },
+    ],
+    syntheticFluff: [
+      { max: 10, price: 150 },
+      { max: 50, price: 130 },
+      { max: 1000, price: 110 },
+    ],
+    combo: [
+      { max: 10, price: 200 },
+      { max: 50, price: 170 },
+      { max: 1000, price: 150 },
+    ],
+  },
   sewingTiers: [
     { max: 170, price: 430 },
     { max: 200, price: 490 },
@@ -11,13 +33,13 @@
     { max: 420, price: 1050 },
   ],
   types: [
-    { name: "Поролоновая подушка", coeff: 0, assembly: 100, materialLogisticsCoeff: 1 },
-    { name: "Поролоновая подушка с синтепоном", coeff: 0.2, assembly: 200, materialLogisticsCoeff: 1 },
+    { name: "Поролоновая подушка", coeff: 0, assembly: 100, assemblyTierKey: "foam", materialLogisticsCoeff: 1 },
+    { name: "Поролоновая подушка с синтепоном", coeff: 0.2, assembly: 200, assemblyTierKey: "sintepon", materialLogisticsCoeff: 1 },
     { name: "Подушка с пуговицами", coeff: 1, assembly: 150, materialLogisticsCoeff: 0.8 },
-    { name: "Подушки с Синтепухом", coeff: 0.2, assembly: 150, materialLogisticsCoeff: 0.8 },
-    { name: "Подушки с синтепухом с перегородками", coeff: 0.5, assembly: 150, materialLogisticsCoeff: 0.8 },
-    { name: "Комбинированная подушка", coeff: 0.8, assembly: 200, materialLogisticsCoeff: 1 },
-    { name: "Комбинированная подушка с перегородками", coeff: 1, assembly: 200, materialLogisticsCoeff: 1 },
+    { name: "Подушки с Синтепухом", coeff: 0.2, assembly: 150, assemblyTierKey: "syntheticFluff", materialLogisticsCoeff: 0.8 },
+    { name: "Подушки с синтепухом с перегородками", coeff: 0.5, assembly: 150, assemblyTierKey: "syntheticFluff", materialLogisticsCoeff: 0.8 },
+    { name: "Комбинированная подушка", coeff: 0.8, assembly: 200, assemblyTierKey: "combo", materialLogisticsCoeff: 1 },
+    { name: "Комбинированная подушка с перегородками", coeff: 1, assembly: 200, assemblyTierKey: "combo", materialLogisticsCoeff: 1 },
     { name: "Подушка на фанере", coeff: 1, assembly: 100, materialLogisticsCoeff: 2 },
   ],
   options: {
@@ -36,6 +58,15 @@
     cashlessCoeff: 1.05,
     materialLogisticsBase: 1000,
   },
+  rentalRates: [
+    { days: 1, price: 420, bulkPrice: 400 },
+    { days: 2, price: 600, bulkPrice: 560 },
+    { days: 3, price: 800, bulkPrice: 740 },
+    { days: 4, price: 900, bulkPrice: 840 },
+    { days: 5, price: 1000, bulkPrice: 920 },
+    { days: 6, price: 1100, bulkPrice: 1000 },
+    { days: 7, price: 1200, bulkPrice: 1100 },
+  ],
   margins: [
     { max: 4, add: 1400 },
     { max: 7, add: 1300 },
@@ -94,11 +125,31 @@ let order = load("pillowCalcOrder", []);
 let history = load("pillowCalcHistory", []);
 let rentalRows = load("pillowCalcRentalRows", []);
 let rentalOrder = load("pillowCalcRentalOrder", []);
+let beanbagRows = load("pillowCalcBeanbagRows", []);
 let rentalDrivers = normalizeRentalDrivers(load("pillowCalcRentalDrivers", defaultRentalDrivers));
 let plExpenses = load("pillowCalcPlExpenses", defaultPlExpenses);
+let rentalWebhook = load("pillowCalcRentalWebhook", "");
+let historyTypeFilter = "all";
 let selectedPlMonth = "";
 let editingIndex = null;
+let editingRentalRowIndex = null;
+let editingRentalOrderLineIndex = null;
 let isFinalized = false;
+let databaseSaveTimer = null;
+let suppressDatabaseSave = false;
+
+const storageKeys = [
+  "pillowCalcSettings",
+  "pillowCalcCompany",
+  "pillowCalcOrder",
+  "pillowCalcHistory",
+  "pillowCalcRentalRows",
+  "pillowCalcRentalOrder",
+  "pillowCalcBeanbagRows",
+  "pillowCalcRentalDrivers",
+  "pillowCalcPlExpenses",
+  "pillowCalcRentalWebhook",
+];
 
 const els = {
   form: document.querySelector("#calcForm"),
@@ -150,6 +201,7 @@ const els = {
   typesList: document.querySelector("#typesList"),
   materialLogisticsList: document.querySelector("#materialLogisticsList"),
   marginList: document.querySelector("#marginList"),
+  rentalRatesList: document.querySelector("#rentalRatesList"),
   generalSettings: document.querySelector("#generalSettings"),
   optionCoeffList: document.querySelector("#optionCoeffList"),
   saveSettings: document.querySelector("#saveSettings"),
@@ -169,6 +221,7 @@ const els = {
   saveCompany: document.querySelector("#saveCompany"),
   companyCard: document.querySelector("#companyCard"),
   historyBody: document.querySelector("#historyBody"),
+  historyTypeFilter: document.querySelector("#historyTypeFilter"),
   clearHistory: document.querySelector("#clearHistory"),
   crmBody: document.querySelector("#crmBody"),
   crmTotalOrders: document.querySelector("#crmTotalOrders"),
@@ -194,6 +247,10 @@ const els = {
   rentalEndHour: document.querySelector("#rentalEndHour"),
   rentalEndMinute: document.querySelector("#rentalEndMinute"),
   rentalStatusSelect: document.querySelector("#rentalStatusSelect"),
+  rentalPickup: document.querySelector("#rentalPickup"),
+  rentalDeliveryAmount: document.querySelector("#rentalDeliveryAmount"),
+  rentalMountingAmount: document.querySelector("#rentalMountingAmount"),
+  rentalPaymentTo: document.querySelector("#rentalPaymentTo"),
   rentalComment: document.querySelector("#rentalComment"),
   addRentalColorLine: document.querySelector("#addRentalColorLine"),
   rentalColorLines: document.querySelector("#rentalColorLines"),
@@ -202,10 +259,38 @@ const els = {
   rentalOrderBody: document.querySelector("#rentalOrderBody"),
   rentalOrderQuantity: document.querySelector("#rentalOrderQuantity"),
   rentalOrderColorSummary: document.querySelector("#rentalOrderColorSummary"),
+  rentalOrderDelivery: document.querySelector("#rentalOrderDelivery"),
+  rentalOrderMounting: document.querySelector("#rentalOrderMounting"),
+  rentalOrderTotal: document.querySelector("#rentalOrderTotal"),
+  rentalOrderProfit: document.querySelector("#rentalOrderProfit"),
   clearRentalOrder: document.querySelector("#clearRentalOrder"),
   sendRentalOrder: document.querySelector("#sendRentalOrder"),
   rentalBody: document.querySelector("#rentalBody"),
   clearRentalRows: document.querySelector("#clearRentalRows"),
+  rentalLiveDays: document.querySelector("#rentalLiveDays"),
+  rentalLiveSubtotal: document.querySelector("#rentalLiveSubtotal"),
+  rentalLiveDelivery: document.querySelector("#rentalLiveDelivery"),
+  rentalLiveProfit: document.querySelector("#rentalLiveProfit"),
+  rentalLiveTotal: document.querySelector("#rentalLiveTotal"),
+  rentalLivePaymentTo: document.querySelector("#rentalLivePaymentTo"),
+  rentalPriceTable: document.querySelector("#rentalPriceTable"),
+  beanbagDate: document.querySelector("#beanbagDate"),
+  beanbagWhat: document.querySelector("#beanbagWhat"),
+  beanbagAmount: document.querySelector("#beanbagAmount"),
+  beanbagDelivery: document.querySelector("#beanbagDelivery"),
+  beanbagMounting: document.querySelector("#beanbagMounting"),
+  beanbagPickup: document.querySelector("#beanbagPickup"),
+  beanbagPaymentTo: document.querySelector("#beanbagPaymentTo"),
+  beanbagPayment: document.querySelector("#beanbagPayment"),
+  beanbagDeliveryPaidBy: document.querySelector("#beanbagDeliveryPaidBy"),
+  beanbagCost: document.querySelector("#beanbagCost"),
+  beanbagDima: document.querySelector("#beanbagDima"),
+  beanbagNikita: document.querySelector("#beanbagNikita"),
+  beanbagProfit: document.querySelector("#beanbagProfit"),
+  saveBeanbagOrder: document.querySelector("#saveBeanbagOrder"),
+  clearBeanbagRows: document.querySelector("#clearBeanbagRows"),
+  beanbagBody: document.querySelector("#beanbagBody"),
+  beanbagStatus: document.querySelector("#beanbagStatus"),
   plPeriodTitle: document.querySelector("#plPeriodTitle"),
   plMonthTabs: document.querySelector("#plMonthTabs"),
   plRevenueTotal: document.querySelector("#plRevenueTotal"),
@@ -227,7 +312,12 @@ function clone(value) {
 
 function load(key, fallback) {
   const saved = localStorage.getItem(key);
-  return saved ? JSON.parse(saved) : clone(fallback);
+  if (!saved) return clone(fallback);
+  try {
+    return JSON.parse(saved);
+  } catch (_error) {
+    return saved;
+  }
 }
 
 function normalizeSettings(value) {
@@ -236,12 +326,22 @@ function normalizeSettings(value) {
     ...value,
     options: { ...clone(defaultSettings.options), ...(value?.options || {}) },
   };
+  merged.rentalRates = (value?.rentalRates?.length ? value.rentalRates : defaultSettings.rentalRates)
+    .map((rate, index) => {
+      const fallback = defaultSettings.rentalRates[index] || defaultSettings.rentalRates.at(-1);
+      return {
+        days: Math.max(1, number(rate.days, fallback.days)),
+        price: Math.max(0, number(rate.price, fallback.price)),
+        bulkPrice: Math.max(0, number(rate.bulkPrice, fallback.bulkPrice)),
+      };
+    })
+    .sort((a, b) => a.days - b.days);
   const defaultTypes = defaultSettings.types;
   const fallbackValues = [1000, 1000, 800, 800, 800, 1000, 1000, 2000];
   const base = Math.max(1, number(merged.options.materialLogisticsBase, defaultSettings.options.materialLogisticsBase));
   merged.options.materialLogisticsBase = base;
   merged.types = (value?.types?.length ? value.types : defaultTypes).map((type, index) => {
-    const defaultType = defaultTypes[index] || {};
+    const defaultType = defaultTypes.find((item) => item.name === type.name) || defaultTypes[index] || {};
     const legacyAmount = number(type.materialLogistics, fallbackValues[index] ?? base);
     const coeff = number(
       type.materialLogisticsCoeff,
@@ -250,6 +350,7 @@ function normalizeSettings(value) {
     return {
       ...defaultType,
       ...type,
+      assemblyTierKey: type.assemblyTierKey || defaultType.assemblyTierKey,
       materialLogisticsCoeff: Math.max(0, coeff),
     };
   });
@@ -278,10 +379,90 @@ function normalizeRentalDrivers(value) {
 
 function save(key, value) {
   localStorage.setItem(key, JSON.stringify(value));
+  if (!suppressDatabaseSave && storageKeys.includes(key)) scheduleDatabaseSave();
 }
 
 function apiPath(path) {
   return path.replace(/^\/+/, "");
+}
+
+function currentDatabaseState() {
+  return {
+    pillowCalcSettings: settings,
+    pillowCalcCompany: company,
+    pillowCalcOrder: order,
+    pillowCalcHistory: history,
+    pillowCalcRentalRows: rentalRows,
+    pillowCalcRentalOrder: rentalOrder,
+    pillowCalcBeanbagRows: beanbagRows,
+    pillowCalcRentalDrivers: rentalDrivers,
+    pillowCalcPlExpenses: plExpenses,
+    pillowCalcRentalWebhook: rentalWebhook,
+  };
+}
+
+function stateHas(state, key) {
+  return Object.prototype.hasOwnProperty.call(state, key);
+}
+
+function applyDatabaseState(state) {
+  if (!state || typeof state !== "object") return;
+  suppressDatabaseSave = true;
+  try {
+    if (stateHas(state, "pillowCalcSettings")) settings = normalizeSettings(state.pillowCalcSettings);
+    if (stateHas(state, "pillowCalcCompany")) {
+      company = normalizeCompany(state.pillowCalcCompany);
+      company.signerTitle = "ИП";
+    }
+    if (stateHas(state, "pillowCalcOrder")) order = Array.isArray(state.pillowCalcOrder) ? state.pillowCalcOrder : [];
+    if (stateHas(state, "pillowCalcHistory")) history = Array.isArray(state.pillowCalcHistory) ? state.pillowCalcHistory : [];
+    if (stateHas(state, "pillowCalcRentalRows")) rentalRows = Array.isArray(state.pillowCalcRentalRows) ? state.pillowCalcRentalRows : [];
+    if (stateHas(state, "pillowCalcRentalOrder")) rentalOrder = Array.isArray(state.pillowCalcRentalOrder) ? state.pillowCalcRentalOrder : [];
+    if (stateHas(state, "pillowCalcBeanbagRows")) beanbagRows = Array.isArray(state.pillowCalcBeanbagRows) ? state.pillowCalcBeanbagRows : [];
+    if (stateHas(state, "pillowCalcRentalDrivers")) rentalDrivers = normalizeRentalDrivers(state.pillowCalcRentalDrivers);
+    if (stateHas(state, "pillowCalcPlExpenses")) plExpenses = Array.isArray(state.pillowCalcPlExpenses) ? state.pillowCalcPlExpenses : clone(defaultPlExpenses);
+    if (stateHas(state, "pillowCalcRentalWebhook")) rentalWebhook = String(state.pillowCalcRentalWebhook || "");
+
+    Object.entries(currentDatabaseState()).forEach(([key, value]) => {
+      localStorage.setItem(key, JSON.stringify(value));
+    });
+  } finally {
+    suppressDatabaseSave = false;
+  }
+}
+
+async function saveDatabaseState(reason = "browser-save") {
+  try {
+    await fetch(apiPath("/api/state"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ reason, state: currentDatabaseState() }),
+    });
+  } catch (error) {
+    console.warn("Database save skipped:", error);
+  }
+}
+
+function scheduleDatabaseSave() {
+  window.clearTimeout(databaseSaveTimer);
+  databaseSaveTimer = window.setTimeout(() => saveDatabaseState(), 500);
+}
+
+async function syncDatabaseState() {
+  try {
+    const response = await fetch(apiPath("/api/state"));
+    if (!response.ok) return;
+    const result = await response.json();
+    const state = result.state || {};
+    if (Object.keys(state).length) {
+      applyDatabaseState(state);
+      renderAll();
+      return;
+    }
+    await saveDatabaseState("initial-browser-state");
+  } catch (error) {
+    console.warn("Database sync skipped:", error);
+  }
 }
 
 function money(value) {
@@ -310,6 +491,22 @@ function parseDate(value) {
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
+function displayDate(value) {
+  const parsed = parseDate(value);
+  if (!parsed) return value || "";
+  const day = String(parsed.getDate()).padStart(2, "0");
+  const month = String(parsed.getMonth() + 1).padStart(2, "0");
+  return `${day}.${month}.${parsed.getFullYear()}`;
+}
+
+function inputDateValue(value) {
+  const parsed = parseDate(value);
+  if (!parsed) return "";
+  const month = String(parsed.getMonth() + 1).padStart(2, "0");
+  const day = String(parsed.getDate()).padStart(2, "0");
+  return `${parsed.getFullYear()}-${month}-${day}`;
+}
+
 function monthKey(date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
 }
@@ -323,12 +520,97 @@ function completedRentalStatus(status) {
   return ["оплачен"].includes(String(status || "").trim().toLowerCase());
 }
 
-function nextOrderNumber() {
-  const usedNumbers = history
+function statusDone(status) {
+  return ["выполнен", "оплачен"].includes(String(status || "").trim().toLowerCase());
+}
+
+function statusPaid(status) {
+  return String(status || "").trim().toLowerCase() === "оплачен";
+}
+
+function orderDone(item) {
+  return Boolean(item?.done) || statusDone(item?.status);
+}
+
+function orderPaid(item) {
+  return Boolean(item?.paid) || statusPaid(item?.status);
+}
+
+function statusFromChecks(done, paid, fallback = "Согласование") {
+  if (paid) return "Оплачен";
+  if (done) return "Выполнен";
+  return statusDone(fallback) ? "Подтвержден" : fallback || "Согласование";
+}
+
+const orderPrefixes = {
+  pillow: "P",
+  rental: "A",
+  beanbag: "K",
+};
+
+const orderStatusOptions = ["Согласование", "Подтвержден", "Выполнен", "Оплачен", "Отменен"];
+
+function orderNumberValue(value) {
+  const match = String(value || "").match(/(\d+)$/);
+  return match ? Number(match[1]) : NaN;
+}
+
+function prefixedOrderNumber(kind, value, fallbackIndex = 0) {
+  const prefix = orderPrefixes[kind] || "";
+  const numberValue = orderNumberValue(value);
+  if (Number.isFinite(numberValue)) return `${prefix}${numberValue}`;
+  return fallbackIndex >= 0 ? `${prefix}${fallbackIndex + 1}` : "";
+}
+
+function nextOrderNumber(kind = "pillow") {
+  const sources = kind === "rental" ? rentalRows : kind === "beanbag" ? beanbagRows : history;
+  const usedNumbers = sources
     .map((item) => item.number)
-    .map((value) => Number(value))
+    .map(orderNumberValue)
     .filter(Number.isFinite);
-  return String((usedNumbers.length ? Math.max(...usedNumbers) : 0) + 1);
+  return `${orderPrefixes[kind] || ""}${(usedNumbers.length ? Math.max(...usedNumbers) : 0) + 1}`;
+}
+
+function pillowStatus(item) {
+  if (item.status) return item.status;
+  if (item.paid) return "Оплачен";
+  if (item.done) return "Выполнен";
+  return "Согласование";
+}
+
+function statusSelect(kind, sourceIndex, value) {
+  const current = value || "Согласование";
+  return `
+    <select class="table-input" data-history-status-kind="${kind}" data-history-status-index="${sourceIndex}">
+      ${orderStatusOptions.map((status) => `<option value="${status}" ${status === current ? "selected" : ""}>${status}</option>`).join("")}
+    </select>
+  `;
+}
+
+function setHistoryOrderStatus(kind, index, status) {
+  if (kind === "rental") {
+    if (!rentalRows[index]) return;
+    rentalRows[index].status = status;
+    rentalRows[index].done = statusDone(status);
+    rentalRows[index].paid = statusPaid(status);
+    save("pillowCalcRentalRows", rentalRows);
+    renderRentalRows();
+  } else if (kind === "beanbag") {
+    if (!beanbagRows[index]) return;
+    beanbagRows[index].status = status;
+    beanbagRows[index].payment = status === "Оплачен" ? "Оплачен" : beanbagRows[index].payment || "";
+    save("pillowCalcBeanbagRows", beanbagRows);
+    renderBeanbagRows();
+  } else {
+    if (!history[index]) return;
+    history[index].status = status;
+    history[index].done = statusDone(status);
+    history[index].paid = statusPaid(status);
+    save("pillowCalcHistory", history);
+  }
+  renderHistory();
+  renderCrm();
+  renderPl();
 }
 
 function currentInput() {
@@ -386,6 +668,12 @@ function orderMarkup(quantity) {
   return (sorted.find((item) => quantity <= item.max) || sorted.at(-1) || { add: 0 }).add;
 }
 
+function assemblyPrice(type, quantity) {
+  const tiers = defaultSettings.assemblyTiers[type.assemblyTierKey] || [];
+  const sorted = [...tiers].sort((a, b) => a.max - b.max);
+  return (sorted.find((item) => quantity <= item.max) || sorted.at(-1) || { price: type.assembly || 0 }).price;
+}
+
 function usesFoam(typeName) {
   return ["Поролоновая подушка", "Поролоновая подушка с синтепоном", "Подушка на фанере"].includes(typeName);
 }
@@ -428,7 +716,7 @@ function calculate(input) {
     (input.decorStitch ? settings.options.decorStitchCoeff : 0) +
     (input.piping ? settings.options.pipingCoeff : 0);
   const sewing = baseSewing * (1 + optionCoeff);
-  const assembly = input.coverOnly ? 0 : type.assembly;
+  const assembly = input.coverOnly ? 0 : assemblyPrice(type, input.quantity);
   const hardware = settings.options.hardware;
   const foam = input.coverOnly ? 0 : usesFoam(type.name) ? volume * 0.0173 * input.foamDensity / 25 : usesComboFoam(type.name) ? volume * 0.0092 * input.foamDensity / 25 : 0;
   const spunbond = usesSpunbond(type.name) ? area * settings.options.spunbondPrice : 0;
@@ -738,7 +1026,7 @@ function renderOrder() {
   els.deliveryTotal.textContent = money(delivery.gross);
   els.orderTotal.textContent = money(total);
   els.profitTotal.textContent = money(profit);
-  els.headerTotal.textContent = money(total);
+  if (els.headerTotal) els.headerTotal.textContent = money(total);
 }
 
 function renderSettings() {
@@ -792,6 +1080,16 @@ function renderSettings() {
       <span></span>
     </div>
   `).join("");
+
+  if (els.rentalRatesList) {
+    els.rentalRatesList.innerHTML = settings.rentalRates.map((rate, index) => `
+      <div class="editor-row rental-rate-row">
+        <label>Суток<input type="number" min="1" step="1" value="${rate.days}" data-rental-rate="${index}" data-field="days"></label>
+        <label>До 39 шт, ₽<input type="number" min="0" step="1" value="${rate.price}" data-rental-rate="${index}" data-field="price"></label>
+        <label>От 40 шт, ₽<input type="number" min="0" step="1" value="${rate.bulkPrice}" data-rental-rate="${index}" data-field="bulkPrice"></label>
+      </div>
+    `).join("");
+  }
 }
 
 function renderCompany() {
@@ -810,38 +1108,106 @@ function readCompanyFromForm() {
 }
 
 function renderHistory() {
-  if (!history.length) {
-    els.historyBody.innerHTML = `<tr class="empty-row"><td colspan="9">Заказов пока нет</td></tr>`;
+  const rows = combinedOrders().filter((item) => historyTypeFilter === "all" || item.orderType === historyTypeFilter);
+  if (!rows.length) {
+    els.historyBody.innerHTML = `<tr class="empty-row"><td colspan="10">Заказов пока нет</td></tr>`;
     renderCrm();
     renderPl();
     return;
   }
-  els.historyBody.innerHTML = history.map((item, index) => `
-    <tr class="history-main-row" data-toggle-history="${index}">
-      <td>${escapeHtml(item.date)}</td>
-      <td>${escapeHtml(item.number)}</td>
+  els.historyBody.innerHTML = rows.map((entry) => {
+    const item = entry.source;
+    const isPillow = entry.kind === "pillow";
+    const sourceIndex = entry.sourceIndex;
+    return `
+    <tr class="history-main-row" ${isPillow ? `data-toggle-history="${sourceIndex}"` : ""}>
+      <td>${escapeHtml(displayDate(item.date))}</td>
+      <td>${escapeHtml(item.number || "-")}</td>
+      <td>${escapeHtml(entry.orderType)}</td>
       <td>${escapeHtml(item.title)}</td>
       <td class="numeric">${item.quantity}</td>
-      <td class="numeric">${money(item.vatAmount || 0)}</td>
+      <td>${statusSelect(entry.kind, sourceIndex, item.status)}</td>
       <td class="numeric">${money(item.total)}</td>
       <td class="numeric">${money(item.profit || 0)}</td>
       <td class="doc-links">
-        ${item.docxUrl ? `<a class="link-btn doc-word" href="${item.docxUrl}" download data-history-link>КП</a>` : ""}
-        ${item.pdfUrl ? `<a class="link-btn doc-pdf" href="${item.pdfUrl}" download data-history-link>КП</a>` : ""}
-        ${item.oksanaDocxUrl ? `<a class="link-btn doc-word" href="${item.oksanaDocxUrl}" download data-history-link>Пошив</a>` : ""}
-        ${item.oksanaPdfUrl ? `<a class="link-btn doc-pdf" href="${item.oksanaPdfUrl}" download data-history-link>Пошив</a>` : ""}
+        ${isPillow && item.docxUrl ? `<a class="link-btn doc-word" href="${item.docxUrl}" download data-history-link>КП</a>` : ""}
+        ${isPillow && item.pdfUrl ? `<a class="link-btn doc-pdf" href="${item.pdfUrl}" download data-history-link>КП</a>` : ""}
+        ${isPillow && item.oksanaDocxUrl ? `<a class="link-btn doc-word" href="${item.oksanaDocxUrl}" download data-history-link>Пошив</a>` : ""}
+        ${isPillow && item.oksanaPdfUrl ? `<a class="link-btn doc-pdf" href="${item.oksanaPdfUrl}" download data-history-link>Пошив</a>` : ""}
       </td>
       <td class="numeric">
-        <button class="icon-btn" type="button" data-open-history-order="${index}" title="Открыть в калькуляторе">✎</button>
-        <button class="icon-btn" type="button" data-remove-history="${index}" title="Удалить заказ">×</button>
+        ${isPillow ? `<button class="icon-btn" type="button" data-open-history-order="${sourceIndex}" title="Открыть в калькуляторе">✎</button>` : ""}
+        ${entry.kind === "rental" ? `<button class="icon-btn" type="button" data-open-history-rental="${sourceIndex}" title="Редактировать аренду">✎</button>` : ""}
+        <button class="icon-btn" type="button" data-remove-history="${sourceIndex}" data-remove-kind="${entry.kind}" title="Удалить заказ">×</button>
       </td>
     </tr>
-    <tr class="history-detail-row" data-history-detail="${index}" hidden>
-      <td colspan="9">${renderHistoryDetails(item, index)}</td>
+    ${isPillow ? `
+    <tr class="history-detail-row" data-history-detail="${sourceIndex}" hidden>
+      <td colspan="10">${renderHistoryDetails(item, sourceIndex)}</td>
     </tr>
-  `).join("");
+    ` : ""}
+  `;
+  }).join("");
   renderCrm();
   renderPl();
+}
+
+function combinedOrders() {
+  const pillow = history.map((item, sourceIndex) => ({
+    kind: "pillow",
+    sourceIndex,
+    orderType: item.orderType || "Подушки",
+    source: {
+      ...item,
+      number: prefixedOrderNumber("pillow", item.number, sourceIndex),
+      status: pillowStatus(item),
+      title: item.title || "Заказ подушек",
+      quantity: item.quantity || item.positionsCount || 0,
+      total: number(item.total),
+      profit: number(item.profit),
+    },
+  }));
+  const rentals = rentalRows.map((row, sourceIndex) => ({
+    kind: "rental",
+    sourceIndex,
+    orderType: "Аренда",
+    source: {
+      ...row,
+      number: prefixedOrderNumber("rental", row.number, sourceIndex),
+      title: row.item || "Аренда",
+      date: row.date || "",
+      quantity: row.quantity || 0,
+      vatAmount: 0,
+      total: number(row.amount),
+      profit: number(row.profit, row.subtotal || row.amount),
+      status: row.status || "Согласование",
+      done: orderDone(row),
+      paid: orderPaid(row),
+    },
+  }));
+  const beanbags = beanbagRows.map((row, sourceIndex) => ({
+    kind: "beanbag",
+    sourceIndex,
+    orderType: "Кресла мешки",
+    source: {
+      ...row,
+      number: prefixedOrderNumber("beanbag", row.number, sourceIndex),
+      title: row.whatOrdered || "Кресла мешки",
+      date: row.date || "",
+      quantity: row.quantity || 1,
+      vatAmount: 0,
+      total: number(row.amount),
+      profit: number(row.profit),
+      status: row.status || row.payment || "Согласование",
+      done: statusDone(row.status || row.payment),
+      paid: statusPaid(row.status || row.payment),
+    },
+  }));
+  return [...pillow, ...rentals, ...beanbags].sort((a, b) => {
+    const dateA = parseDate(a.source.date)?.getTime() || 0;
+    const dateB = parseDate(b.source.date)?.getTime() || 0;
+    return dateB - dateA;
+  });
 }
 
 function renderHistoryDetails(item, historyIndex) {
@@ -858,7 +1224,6 @@ function renderHistoryDetails(item, historyIndex) {
       <td class="numeric"><input class="table-input numeric-input" type="number" min="0" step="1" value="${Math.round(line.sewingTotal || 0)}" data-history-edit="${historyIndex}" data-line="${lineIndex}" data-field="sewingTotal"></td>
       <td class="numeric"><input class="table-input numeric-input" type="number" min="0" step="1" value="${Math.round(line.assemblyPrice || 0)}" data-history-edit="${historyIndex}" data-line="${lineIndex}" data-field="assemblyPrice"></td>
       <td class="numeric"><input class="table-input numeric-input" type="number" min="0" step="1" value="${Math.round(line.assemblyTotal || 0)}" data-history-edit="${historyIndex}" data-line="${lineIndex}" data-field="assemblyTotal"></td>
-      <td class="numeric"><input class="table-input numeric-input" type="number" min="0" step="1" value="${Math.round(line.vatAmount || 0)}" data-history-edit="${historyIndex}" data-line="${lineIndex}" data-field="vatAmount"></td>
       <td class="numeric"><input class="table-input numeric-input" type="number" min="0" step="1" value="${Math.round((line.totalPrice || 0) / Math.max(1, number(line.quantity, 1)))}" data-history-edit="${historyIndex}" data-line="${lineIndex}" data-field="unitPrice"></td>
       <td class="numeric"><input class="table-input numeric-input" type="number" min="0" step="1" value="${Math.round(line.profit || 0)}" data-history-edit="${historyIndex}" data-line="${lineIndex}" data-field="profit"></td>
       <td class="numeric"><input class="table-input numeric-input" type="number" min="0" step="1" value="${Math.round(line.totalPrice || 0)}" data-history-edit="${historyIndex}" data-line="${lineIndex}" data-field="totalPrice"></td>
@@ -870,7 +1235,7 @@ function renderHistoryDetails(item, historyIndex) {
         <table class="history-calc-table">
           <thead>
             <tr>
-              <th>Позиция</th><th>Размер</th><th>Кол-во</th><th>Пошив за 1 шт</th><th>Пошив итог</th><th>Сборка за 1 шт</th><th>Сборка итог</th><th>НДС, 5%</th><th>Цена</th><th>Прибыль</th><th>Итого</th>
+              <th>Позиция</th><th>Размер</th><th>Кол-во</th><th>Пошив за 1 шт</th><th>Пошив итог</th><th>Сборка за 1 шт</th><th>Сборка итог</th><th>Цена</th><th>Прибыль</th><th>Итого</th>
             </tr>
           </thead>
           <tbody>${rows}</tbody>
@@ -941,7 +1306,7 @@ function updateHistoryLineTotals(input) {
   if (input.dataset.field === "totalPrice") {
     unitInput.value = Math.round(Math.max(0, number(totalInput.value)) / quantity);
   }
-  if (["unitPrice", "quantity", "totalPrice"].includes(input.dataset.field)) {
+  if (vatInput && ["unitPrice", "quantity", "totalPrice"].includes(input.dataset.field)) {
     vatInput.value = Math.round(vatFromGross(number(totalInput.value), sourceLine.vatRate));
   }
   if (["sewingPrice", "sewingTotal", "assemblyPrice", "assemblyTotal", "unitPrice", "quantity", "totalPrice"].includes(input.dataset.field)) {
@@ -961,6 +1326,7 @@ function readHistoryDetailInputs(historyIndex) {
     line[field] = Math.max(field === "quantity" ? 1 : 0, number(input.value, line[field]));
   });
   item.payload.lines.forEach((line, index) => {
+    line.vatAmount = vatFromGross(number(line.totalPrice), line.vatRate);
     const snapshot = item.orderSnapshot?.[index];
     if (snapshot) {
       snapshot.input.quantity = Math.max(1, number(line.quantity, snapshot.input.quantity));
@@ -1022,11 +1388,12 @@ async function saveHistoryOrder(index) {
 
 function renderCrm() {
   if (!els.crmBody) return;
-  const totalOrders = history.length;
-  const doneOrders = history.filter((item) => item.done).length;
-  const paidOrders = history.filter((item) => item.paid).length;
-  const totalProfit = history.reduce((sum, item) => sum + number(item.profit), 0);
-  const paidProfit = history.reduce((sum, item) => sum + (item.paid ? number(item.profit) : 0), 0);
+  const rows = combinedOrders();
+  const totalOrders = rows.length;
+  const doneOrders = rows.filter((entry) => entry.source.done).length;
+  const paidOrders = rows.filter((entry) => entry.source.paid).length;
+  const totalProfit = rows.reduce((sum, entry) => sum + number(entry.source.profit), 0);
+  const paidProfit = rows.reduce((sum, entry) => sum + (entry.source.paid ? number(entry.source.profit) : 0), 0);
 
   els.crmTotalOrders.textContent = totalOrders;
   els.crmDoneOrders.textContent = doneOrders;
@@ -1034,22 +1401,26 @@ function renderCrm() {
   els.crmTotalProfit.textContent = money(totalProfit);
   els.crmPaidProfit.textContent = money(paidProfit);
 
-  if (!history.length) {
+  if (!rows.length) {
     els.crmBody.innerHTML = `<tr class="empty-row"><td colspan="7">Заказы пока не сформированы</td></tr>`;
     return;
   }
 
-  els.crmBody.innerHTML = history.map((item, index) => `
+  els.crmBody.innerHTML = rows.map((entry) => {
+    const item = entry.source;
+    const canEdit = entry.kind === "pillow" || entry.kind === "rental";
+    return `
     <tr>
-      <td>${escapeHtml(item.date)}</td>
-      <td>${escapeHtml(item.number)}</td>
-      <td>${escapeHtml(item.title || "Заказ")}</td>
+      <td>${escapeHtml(displayDate(item.date))}</td>
+      <td>${escapeHtml(item.number || "-")}</td>
+      <td>${escapeHtml(entry.orderType)}</td>
       <td class="numeric">${item.positionsCount || item.linesCount || item.quantity || 0}</td>
       <td class="numeric">${money(item.profit || 0)}</td>
-      <td class="numeric"><input class="status-check" type="checkbox" data-crm-status="done" data-crm-index="${index}" ${item.done ? "checked" : ""} /></td>
-      <td class="numeric"><input class="status-check" type="checkbox" data-crm-status="paid" data-crm-index="${index}" ${item.paid ? "checked" : ""} /></td>
+      <td class="numeric"><input class="status-check" type="checkbox" data-crm-status="done" data-crm-kind="${entry.kind}" data-crm-index="${entry.sourceIndex}" ${item.done ? "checked" : ""} ${canEdit ? "" : "disabled"} /></td>
+      <td class="numeric"><input class="status-check" type="checkbox" data-crm-status="paid" data-crm-kind="${entry.kind}" data-crm-index="${entry.sourceIndex}" ${item.paid ? "checked" : ""} ${canEdit ? "" : "disabled"} /></td>
     </tr>
-  `).join("");
+  `;
+  }).join("");
 }
 
 function plMonths() {
@@ -1065,7 +1436,11 @@ function plMonths() {
   });
   rentalRows.forEach((row) => {
     const date = parseDate(row.date);
-    if (completedRentalStatus(row.status) && date) months.add(monthKey(date));
+    if (orderPaid(row) && date) months.add(monthKey(date));
+  });
+  beanbagRows.forEach((row) => {
+    const date = parseDate(row.date);
+    if (date) months.add(monthKey(date));
   });
   return [...months].sort();
 }
@@ -1077,24 +1452,39 @@ function plDataForMonth(key) {
   });
   const completedRentals = rentalRows.filter((row) => {
     const date = parseDate(row.date);
-    return completedRentalStatus(row.status) && date && monthKey(date) === key;
+    return orderPaid(row) && date && monthKey(date) === key;
+  });
+  const beanbagOrders = beanbagRows.filter((row) => {
+    const date = parseDate(row.date);
+    return date && monthKey(date) === key;
   });
   const orderRevenue = completedOrders.reduce((sum, item) => sum + number(item.total), 0);
   const orderProfit = completedOrders.reduce((sum, item) => sum + number(item.profit), 0);
   const orderCost = Math.max(0, orderRevenue - orderProfit);
   const rentalRevenue = completedRentals.reduce((sum, row) => sum + number(row.amount), 0);
+  const rentalProfit = completedRentals.reduce((sum, row) => sum + number(row.profit, row.subtotal || row.amount), 0);
+  const rentalCost = Math.max(0, rentalRevenue - rentalProfit);
+  const beanbagRevenue = beanbagOrders.reduce((sum, row) => sum + number(row.amount), 0);
+  const beanbagProfit = beanbagOrders.reduce((sum, row) => sum + number(row.profit), 0);
+  const beanbagCost = beanbagOrders.reduce((sum, row) => sum + number(row.cost), 0);
   const expenses = plExpenses.reduce((sum, item) => sum + Math.max(0, number(item.amount)), 0);
-  const revenue = orderRevenue + rentalRevenue;
-  const grossProfit = orderProfit + rentalRevenue;
+  const revenue = orderRevenue + rentalRevenue + beanbagRevenue;
+  const grossProfit = orderProfit + rentalProfit + beanbagProfit;
   const netProfit = grossProfit - expenses;
   const margin = revenue > 0 ? netProfit / revenue * 100 : 0;
   return {
     completedOrders,
     completedRentals,
+    beanbagOrders,
     orderRevenue,
     orderCost,
     orderProfit,
     rentalRevenue,
+    rentalCost,
+    rentalProfit,
+    beanbagRevenue,
+    beanbagCost,
+    beanbagProfit,
     revenue,
     expenses,
     grossProfit,
@@ -1150,9 +1540,12 @@ function renderPl() {
     <tr><th colspan="2">Доходы</th></tr>
     <tr><td>Заказы выполненные и оплаченные</td><td class="numeric">${money(data.orderRevenue)}</td></tr>
     <tr><td>Аренда выполненная</td><td class="numeric">${money(data.rentalRevenue)}</td></tr>
+    <tr><td>Кресла мешки</td><td class="numeric">${money(data.beanbagRevenue)}</td></tr>
     <tr class="pl-total-row"><td>Итого выручка</td><td class="numeric">${money(data.revenue)}</td></tr>
     <tr><th colspan="2">Себестоимость</th></tr>
     <tr><td>Себестоимость заказов</td><td class="numeric">${money(data.orderCost)}</td></tr>
+    <tr><td>Себестоимость аренды</td><td class="numeric">${money(data.rentalCost)}</td></tr>
+    <tr><td>Себестоимость кресел мешков</td><td class="numeric">${money(data.beanbagCost)}</td></tr>
     <tr class="pl-total-row"><td>Валовая прибыль</td><td class="numeric">${money(data.grossProfit)}</td></tr>
     <tr><th colspan="2">Постоянные расходы</th></tr>
     ${plExpenses.map((item) => `<tr><td>${escapeHtml(item.name)}</td><td class="numeric">${money(number(item.amount))}</td></tr>`).join("")}
@@ -1217,6 +1610,85 @@ function rentalDriverValue() {
   return els.rentalDriver?.value.trim() || "";
 }
 
+function dateTimeFromParts(date, time) {
+  if (!date) return null;
+  const [hour = "00", minute = "00"] = String(time || "00:00").split(":");
+  const parsed = new Date(`${date}T${hour.padStart(2, "0")}:${minute.padStart(2, "0")}:00`);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function rentalDays(startDate, startTime, endDate, endTime) {
+  const start = dateTimeFromParts(startDate, startTime);
+  const end = dateTimeFromParts(endDate, endTime);
+  if (!start || !end || end <= start) return 1;
+  return Math.max(1, Math.ceil((end - start) / (24 * 60 * 60 * 1000)));
+}
+
+function rentalRateFor(days, quantity) {
+  const sorted = [...settings.rentalRates].sort((a, b) => a.days - b.days);
+  const rate = sorted.find((item) => days <= item.days) || sorted.at(-1) || { price: 0, bulkPrice: 0 };
+  return quantity >= 40 ? rate.bulkPrice : rate.price;
+}
+
+function rentalCalculation(values = {}) {
+  const startDate = values.startDate ?? els.rentalStart?.value ?? "";
+  const startTime = values.startTime ?? timeValue(els.rentalStartHour?.value, els.rentalStartMinute?.value);
+  const endDate = values.endDate ?? els.rentalEnd?.value ?? "";
+  const endTime = values.endTime ?? timeValue(els.rentalEndHour?.value, els.rentalEndMinute?.value);
+  const quantity = Math.max(1, number(values.quantity ?? rentalQuantity(readRentalColorLines()), 1));
+  const days = rentalDays(startDate, startTime, endDate, endTime);
+  const unitPrice = rentalRateFor(days, quantity);
+  const subtotal = unitPrice * quantity;
+  const pickup = values.pickup ?? els.rentalPickup?.value ?? "Нет";
+  const delivery = pickup === "Да" ? 0 : Math.max(0, number(values.deliveryAmount ?? els.rentalDeliveryAmount?.value));
+  const mounting = Math.max(0, number(values.mountingAmount ?? els.rentalMountingAmount?.value));
+  const profit = subtotal;
+  const total = subtotal + delivery + mounting;
+  return {
+    days,
+    unitPrice,
+    subtotal,
+    delivery,
+    mounting,
+    profit,
+    dimaProfit: profit / 2,
+    nikitaProfit: profit / 2,
+    total,
+    cost: Math.max(0, total - profit),
+  };
+}
+
+function renderRentalLive() {
+  if (!els.rentalLiveTotal) return;
+  const calc = rentalCalculation();
+  els.rentalLiveDays.textContent = String(calc.days);
+  els.rentalLiveSubtotal.textContent = money(calc.subtotal);
+  els.rentalLiveDelivery.textContent = money(calc.delivery + calc.mounting);
+  els.rentalLiveProfit.textContent = money(calc.profit);
+  els.rentalLiveTotal.textContent = money(calc.total);
+  els.rentalLivePaymentTo.textContent = els.rentalPaymentTo?.value || "Диме";
+}
+
+function renderRentalPriceTable() {
+  if (!els.rentalPriceTable) return;
+  els.rentalPriceTable.innerHTML = `
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Срок</th><th>До 39 шт</th><th>От 40 шт</th></tr></thead>
+        <tbody>
+          ${settings.rentalRates.map((rate) => `
+            <tr>
+              <td>Груша ${rate.days} сутки</td>
+              <td class="numeric">${money(rate.price)}</td>
+              <td class="numeric">${money(rate.bulkPrice)}</td>
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
 function addRentalDriver() {
   const driver = els.newRentalDriver?.value.trim();
   if (!driver) return;
@@ -1278,9 +1750,99 @@ function rentalQuantity(lines) {
   return lines.reduce((sum, line) => sum + Math.max(1, number(line.quantity, 1)), 0);
 }
 
+function rentalPeriodText(row) {
+  const start = [displayDate(row.startDate), row.startTime].filter(Boolean).join(" ");
+  const end = [displayDate(row.endDate), row.endTime].filter(Boolean).join(" ");
+  if (start && end) return `${start} → ${end}`;
+  return start || end || "-";
+}
+
+function setTimeSelects(time, hourSelect, minuteSelect) {
+  const [hour = "", minute = ""] = String(time || "").split(":");
+  if (hourSelect) hourSelect.value = hour;
+  if (minuteSelect) minuteSelect.value = minute;
+}
+
+function normalizeRentalEditLine(line, fallback = {}) {
+  const colors = Array.isArray(line.colors) && line.colors.length
+    ? line.colors
+    : Array.isArray(fallback.colors) && fallback.colors.length
+      ? fallback.colors
+      : [defaultRentalColorLine()];
+  const quantity = Math.max(1, number(line.quantity, fallback.quantity || rentalQuantity(colors)));
+  return {
+    ...fallback,
+    ...line,
+    colors,
+    colorSummary: line.colorSummary || colorSummary(colors),
+    quantity,
+    date: line.date || fallback.date || todayIso(),
+    item: line.item || fallback.item || "Кресло Груша",
+    driver: line.driver || fallback.driver || "",
+    pickup: line.pickup || fallback.pickup || "Нет",
+    paymentTo: line.paymentTo || fallback.paymentTo || "Диме",
+    status: line.status || fallback.status || "Согласование",
+    deliveryAmount: number(line.deliveryAmount, fallback.deliveryAmount || 0),
+    mountingAmount: number(line.mountingAmount, fallback.mountingAmount || 0),
+    amount: number(line.amount, fallback.amount || 0),
+    subtotal: number(line.subtotal, fallback.subtotal || 0),
+    unitPrice: number(line.unitPrice, fallback.unitPrice || 0),
+    days: number(line.days, fallback.days || 1),
+    profit: number(line.profit, fallback.profit || line.subtotal || line.amount || 0),
+  };
+}
+
+function loadRentalHistoryOrder(index) {
+  const source = rentalRows[index];
+  if (!source) return;
+  const sourceWithNumber = { ...source, number: prefixedOrderNumber("rental", source.number, index) };
+  const lines = Array.isArray(sourceWithNumber.lines) && sourceWithNumber.lines.length
+    ? sourceWithNumber.lines.map((line) => normalizeRentalEditLine(line, sourceWithNumber))
+    : [normalizeRentalEditLine(sourceWithNumber)];
+  rentalOrder = lines;
+  editingRentalRowIndex = index;
+  editingRentalOrderLineIndex = 0;
+  save("pillowCalcRentalOrder", rentalOrder);
+
+  const first = lines[0] || {};
+  els.rentalDate.value = inputDateValue(first.date || source.date) || todayIso();
+  els.rentalClient.value = first.client || source.client || "";
+  els.rentalPhone.value = first.phone || source.phone || "";
+  renderRentalDrivers(first.driver || source.driver || "");
+  els.rentalStart.value = inputDateValue(first.startDate || source.startDate);
+  els.rentalEnd.value = inputDateValue(first.endDate || source.endDate);
+  setTimeSelects(first.startTime || source.startTime, els.rentalStartHour, els.rentalStartMinute);
+  setTimeSelects(first.endTime || source.endTime, els.rentalEndHour, els.rentalEndMinute);
+  if (els.rentalPickup) els.rentalPickup.value = first.pickup || source.pickup || "Нет";
+  if (els.rentalDeliveryAmount) els.rentalDeliveryAmount.value = number(first.deliveryAmount, source.deliveryAmount || 0);
+  if (els.rentalMountingAmount) els.rentalMountingAmount.value = number(first.mountingAmount, source.mountingAmount || 0);
+  if (els.rentalPaymentTo) els.rentalPaymentTo.value = first.paymentTo || source.paymentTo || "Диме";
+  if (els.rentalStatusSelect) els.rentalStatusSelect.value = first.status || source.status || "Согласование";
+  if (els.rentalComment) els.rentalComment.value = first.comment || source.comment || "";
+  renderRentalColorLines(first.colors || source.colors || [defaultRentalColorLine()]);
+  renderRentalLive();
+  renderRentalOrder();
+  document.querySelector('[data-tab="rental"]').click();
+  els.rentalStatus.textContent = "Заказ аренды открыт для редактирования";
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
 function rentalFormPayload() {
   const colors = readRentalColorLines();
+  const startTime = timeValue(els.rentalStartHour.value, els.rentalStartMinute.value);
+  const endTime = timeValue(els.rentalEndHour.value, els.rentalEndMinute.value);
+  const calculation = rentalCalculation({
+    quantity: rentalQuantity(colors),
+    startDate: els.rentalStart.value,
+    startTime,
+    endDate: els.rentalEnd.value,
+    endTime,
+    pickup: els.rentalPickup.value,
+    deliveryAmount: els.rentalDeliveryAmount.value,
+    mountingAmount: els.rentalMountingAmount.value,
+  });
   return {
+    orderType: "Аренда",
     date: els.rentalDate.value || todayIso(),
     client: els.rentalClient.value.trim(),
     phone: els.rentalPhone.value.trim(),
@@ -1289,20 +1851,50 @@ function rentalFormPayload() {
     colors,
     colorSummary: colorSummary(colors),
     quantity: rentalQuantity(colors),
-    amount: 0,
+    amount: calculation.total,
+    subtotal: calculation.subtotal,
+    unitPrice: calculation.unitPrice,
+    days: calculation.days,
+    deliveryAmount: calculation.delivery,
+    mountingAmount: calculation.mounting,
+    profit: calculation.profit,
+    dimaProfit: calculation.dimaProfit,
+    nikitaProfit: calculation.nikitaProfit,
+    cost: calculation.cost,
+    pickup: els.rentalPickup.value,
+    paymentTo: els.rentalPaymentTo.value,
     startDate: els.rentalStart.value,
-    startTime: timeValue(els.rentalStartHour.value, els.rentalStartMinute.value),
+    startTime,
     endDate: els.rentalEnd.value,
-    endTime: timeValue(els.rentalEndHour.value, els.rentalEndMinute.value),
+    endTime,
     status: els.rentalStatusSelect.value,
+    done: statusDone(els.rentalStatusSelect.value),
+    paid: statusPaid(els.rentalStatusSelect.value),
     comment: els.rentalComment.value.trim(),
     webhookUrl: els.rentalWebhookUrl.value.trim(),
   };
 }
 
+function upsertRentalOrderLine(payload) {
+  if (editingRentalOrderLineIndex !== null && rentalOrder[editingRentalOrderLineIndex]) {
+    const previous = rentalOrder[editingRentalOrderLineIndex];
+    rentalOrder[editingRentalOrderLineIndex] = {
+      ...payload,
+      number: previous.number,
+      createdAt: previous.createdAt || new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    editingRentalOrderLineIndex = null;
+    return "Позиция аренды обновлена";
+  }
+  rentalOrder.push({ ...payload, createdAt: new Date().toISOString() });
+  return "Позиция добавлена";
+}
+
 function rentalOrderPayload(webhookUrl) {
   const lines = rentalOrder.map((row, index) => ({
     index: index + 1,
+    number: row.number,
     date: row.date,
     client: row.client,
     phone: row.phone,
@@ -1310,17 +1902,32 @@ function rentalOrderPayload(webhookUrl) {
     item: row.item,
     quantity: row.quantity,
     amount: row.amount,
+    subtotal: row.subtotal,
+    unitPrice: row.unitPrice,
+    days: row.days,
+    deliveryAmount: row.deliveryAmount,
+    mountingAmount: row.mountingAmount,
+    profit: row.profit,
+    dimaProfit: row.dimaProfit,
+    nikitaProfit: row.nikitaProfit,
+    cost: row.cost,
+    pickup: row.pickup,
+    paymentTo: row.paymentTo,
     startDate: row.startDate,
     startTime: row.startTime,
     endDate: row.endDate,
     endTime: row.endTime,
     status: row.status,
+    done: orderDone(row),
+    paid: orderPaid(row),
     comment: row.comment,
     colors: row.colors,
     colorSummary: row.colorSummary,
   }));
   const allColors = lines.flatMap((line) => line.colors || []);
   return {
+    orderType: "Аренда",
+    number: lines[0]?.number || nextOrderNumber("rental"),
     date: lines[0]?.date || todayIso(),
     client: lines[0]?.client || "",
     phone: lines[0]?.phone || "",
@@ -1328,16 +1935,43 @@ function rentalOrderPayload(webhookUrl) {
     item: lines.map((line) => line.item).filter(Boolean).join("; "),
     quantity: lines.reduce((sum, line) => sum + number(line.quantity), 0),
     amount: lines.reduce((sum, line) => sum + number(line.amount), 0),
+    subtotal: lines.reduce((sum, line) => sum + number(line.subtotal), 0),
+    deliveryAmount: lines.reduce((sum, line) => sum + number(line.deliveryAmount), 0),
+    mountingAmount: lines.reduce((sum, line) => sum + number(line.mountingAmount), 0),
+    profit: lines.reduce((sum, line) => sum + number(line.profit), 0),
+    dimaProfit: lines.reduce((sum, line) => sum + number(line.dimaProfit), 0),
+    nikitaProfit: lines.reduce((sum, line) => sum + number(line.nikitaProfit), 0),
+    cost: lines.reduce((sum, line) => sum + number(line.cost), 0),
+    pickup: lines[0]?.pickup || "Нет",
+    paymentTo: lines[0]?.paymentTo || "Диме",
     startDate: lines[0]?.startDate || "",
     startTime: lines[0]?.startTime || "",
     endDate: lines[0]?.endDate || "",
     endTime: lines[0]?.endTime || "",
     status: lines[0]?.status || "Согласование",
+    done: lines.some((line) => orderDone(line)),
+    paid: lines.some((line) => orderPaid(line)),
     comment: lines.map((line) => line.comment).filter(Boolean).join("; "),
     colors: allColors,
     colorSummary: colorSummary(allColors),
     lines,
     webhookUrl,
+  };
+}
+
+function displayRentalPayloadDates(payload) {
+  const formatLine = (line) => ({
+    ...line,
+    date: displayDate(line.date),
+    startDate: displayDate(line.startDate),
+    endDate: displayDate(line.endDate),
+  });
+  return {
+    ...payload,
+    date: displayDate(payload.date),
+    startDate: displayDate(payload.startDate),
+    endDate: displayDate(payload.endDate),
+    lines: (payload.lines || []).map(formatLine),
   };
 }
 
@@ -1350,23 +1984,33 @@ function resetRentalForm(payload = {}) {
   if (els.rentalEndHour) els.rentalEndHour.value = "";
   if (els.rentalEndMinute) els.rentalEndMinute.value = "";
   els.rentalWebhookUrl.value = webhookUrl;
+  if (els.rentalPickup) els.rentalPickup.value = "Нет";
+  if (els.rentalDeliveryAmount) els.rentalDeliveryAmount.value = 0;
+  if (els.rentalMountingAmount) els.rentalMountingAmount.value = 0;
+  if (els.rentalPaymentTo) els.rentalPaymentTo.value = "Диме";
   renderRentalDrivers();
   renderRentalColorLines();
+  renderRentalLive();
 }
 
 function renderRentalOrder() {
   if (!els.rentalOrderBody) return;
   if (!rentalOrder.length) {
-    els.rentalOrderBody.innerHTML = `<tr class="empty-row"><td colspan="7">Позиции аренды пока не добавлены</td></tr>`;
+    els.rentalOrderBody.innerHTML = `<tr class="empty-row"><td colspan="12">Позиции аренды пока не добавлены</td></tr>`;
   } else {
     els.rentalOrderBody.innerHTML = rentalOrder.map((row, index) => `
       <tr>
-        <td>${escapeHtml(row.date)}</td>
+        <td>${escapeHtml(displayDate(row.date))}</td>
         <td>${escapeHtml(row.client || "-")}</td>
-        <td><strong>${escapeHtml(row.item)}</strong></td>
+        <td><strong>${escapeHtml(row.item)}</strong><br><span class="muted-cell">${number(row.days, 1)} сут. · ${money(row.unitPrice || 0)} / шт</span></td>
+        <td>${escapeHtml(rentalPeriodText(row))}</td>
         <td>${escapeHtml(row.driver || "-")}</td>
         <td>${escapeHtml(row.colorSummary || "-")}</td>
         <td class="numeric">${row.quantity}</td>
+        <td class="numeric">${money(row.deliveryAmount || 0)}</td>
+        <td class="numeric">${money(row.mountingAmount || 0)}</td>
+        <td class="numeric">${money(row.amount || 0)}</td>
+        <td class="numeric">${money(row.profit || 0)}</td>
         <td>
           <div class="row-actions">
             <button class="icon-btn" type="button" data-remove-rental-order="${index}" title="Удалить">×</button>
@@ -1378,42 +2022,75 @@ function renderRentalOrder() {
   const allColors = rentalOrder.flatMap((row) => row.colors || []);
   els.rentalOrderQuantity.textContent = rentalOrder.reduce((sum, row) => sum + number(row.quantity), 0);
   els.rentalOrderColorSummary.textContent = allColors.length ? colorSummary(allColors) : "-";
+  if (els.rentalOrderDelivery) els.rentalOrderDelivery.textContent = money(rentalOrder.reduce((sum, row) => sum + number(row.deliveryAmount), 0));
+  if (els.rentalOrderMounting) els.rentalOrderMounting.textContent = money(rentalOrder.reduce((sum, row) => sum + number(row.mountingAmount), 0));
+  if (els.rentalOrderTotal) els.rentalOrderTotal.textContent = money(rentalOrder.reduce((sum, row) => sum + number(row.amount), 0));
+  if (els.rentalOrderProfit) els.rentalOrderProfit.textContent = money(rentalOrder.reduce((sum, row) => sum + number(row.profit), 0));
 }
 
 function renderRentalRows() {
-  const webhook = localStorage.getItem("pillowCalcRentalWebhook") || "";
-  if (els.rentalWebhookUrl) els.rentalWebhookUrl.value = webhook;
+  if (els.rentalWebhookUrl) els.rentalWebhookUrl.value = rentalWebhook;
   if (els.rentalDate && !els.rentalDate.value) els.rentalDate.value = todayIso();
   if (els.rentalColorLines && !els.rentalColorLines.children.length) renderRentalColorLines();
   if (!els.rentalBody) return;
 
   if (!rentalRows.length) {
-    els.rentalBody.innerHTML = `<tr class="empty-row"><td colspan="7">Заказы аренды пока не отправлялись</td></tr>`;
-    renderPl();
+    els.rentalBody.innerHTML = `<tr class="empty-row"><td colspan="10">Заказы аренды пока не отправлялись</td></tr>`;
     return;
   }
 
-  els.rentalBody.innerHTML = rentalRows.map((row) => `
+  els.rentalBody.innerHTML = rentalRows.map((row, index) => `
     <tr>
-      <td>${escapeHtml(row.date)}</td>
+      <td>${escapeHtml(displayDate(row.date))}</td>
       <td>${escapeHtml(row.client || "-")}</td>
       <td>${escapeHtml(row.item)}</td>
       <td>${escapeHtml(row.driver || "-")}</td>
       <td>${escapeHtml(row.colorSummary || "-")}</td>
       <td class="numeric">${row.quantity}</td>
+      <td class="numeric">${money(row.amount || 0)}</td>
       <td>${escapeHtml(row.status || "-")}</td>
+      <td class="numeric"><input class="status-check" type="checkbox" data-rental-row-status="done" data-rental-row-index="${index}" ${orderDone(row) ? "checked" : ""} /></td>
+      <td class="numeric"><input class="status-check" type="checkbox" data-rental-row-status="paid" data-rental-row-index="${index}" ${orderPaid(row) ? "checked" : ""} /></td>
     </tr>
   `).join("");
+}
+
+function setRentalRowChecks(index, field, checked) {
+  const row = rentalRows[index];
+  if (!row) return;
+  if (field === "paid") {
+    row.paid = checked;
+    if (checked) row.done = true;
+  } else {
+    row.done = checked;
+    if (!checked) row.paid = false;
+  }
+  row.status = statusFromChecks(row.done, row.paid, row.status);
+  if (Array.isArray(row.lines)) {
+    row.lines = row.lines.map((line) => ({
+      ...line,
+      done: row.done,
+      paid: row.paid,
+      status: row.status,
+    }));
+  }
+  save("pillowCalcRentalRows", rentalRows);
+  renderRentalRows();
+  renderHistory();
+  renderCrm();
   renderPl();
 }
 
 function submitRental(event) {
   event.preventDefault();
   const payload = rentalFormPayload();
-  rentalOrder.push({ ...payload, createdAt: new Date().toISOString() });
+  const message = upsertRentalOrderLine(payload);
   save("pillowCalcRentalOrder", rentalOrder);
-  if (payload.webhookUrl) localStorage.setItem("pillowCalcRentalWebhook", payload.webhookUrl);
-  els.rentalStatus.textContent = "Позиция добавлена";
+  if (payload.webhookUrl) {
+    rentalWebhook = payload.webhookUrl;
+    save("pillowCalcRentalWebhook", rentalWebhook);
+  }
+  els.rentalStatus.textContent = message;
   resetRentalForm(payload);
   renderRentalOrder();
 }
@@ -1426,7 +2103,11 @@ function hasRentalDraft() {
     rentalDriverValue() ||
     els.rentalStart.value ||
     els.rentalEnd.value ||
-    els.rentalComment.value.trim() ||
+  els.rentalComment.value.trim() ||
+    number(els.rentalDeliveryAmount?.value) > 0 ||
+    number(els.rentalMountingAmount?.value) > 0 ||
+    (els.rentalPickup?.value || "Нет") !== "Нет" ||
+    (els.rentalPaymentTo?.value || "Диме") !== "Диме" ||
     colors.some((line) => number(line.quantity) > 1 || line.color !== rentalColors[0])
   );
 }
@@ -1434,16 +2115,19 @@ function hasRentalDraft() {
 function addRentalDraftToOrder() {
   if (!hasRentalDraft()) return false;
   const payload = rentalFormPayload();
-  rentalOrder.push({ ...payload, createdAt: new Date().toISOString() });
+  upsertRentalOrderLine(payload);
   save("pillowCalcRentalOrder", rentalOrder);
-  if (payload.webhookUrl) localStorage.setItem("pillowCalcRentalWebhook", payload.webhookUrl);
+  if (payload.webhookUrl) {
+    rentalWebhook = payload.webhookUrl;
+    save("pillowCalcRentalWebhook", rentalWebhook);
+  }
   resetRentalForm(payload);
   renderRentalOrder();
   return true;
 }
 
 async function sendRentalOrder() {
-  const webhookUrl = els.rentalWebhookUrl.value.trim() || localStorage.getItem("pillowCalcRentalWebhook") || "";
+  const webhookUrl = els.rentalWebhookUrl.value.trim() || rentalWebhook || "";
   if (!webhookUrl) {
     alert("Сначала вставьте webhook Google Apps Script.");
     return;
@@ -1453,7 +2137,7 @@ async function sendRentalOrder() {
     alert("Сначала заполните заказ аренды.");
     return;
   }
-  const payload = rentalOrderPayload(webhookUrl);
+  const payload = displayRentalPayloadDates(rentalOrderPayload(webhookUrl));
 
   els.rentalStatus.textContent = "Сохраняю...";
   els.sendRentalOrder.disabled = true;
@@ -1468,21 +2152,168 @@ async function sendRentalOrder() {
       throw new Error(result.error || "Google Таблица не приняла данные");
     }
 
-    rentalRows.unshift({ ...payload, sentAt: new Date().toISOString() });
+    const savedPayload = { ...payload, sentAt: new Date().toISOString() };
+    if (editingRentalRowIndex !== null && rentalRows[editingRentalRowIndex]) {
+      savedPayload.sentAt = rentalRows[editingRentalRowIndex].sentAt || savedPayload.sentAt;
+      savedPayload.updatedAt = new Date().toISOString();
+      rentalRows[editingRentalRowIndex] = savedPayload;
+    } else {
+      rentalRows.unshift(savedPayload);
+    }
+    editingRentalRowIndex = null;
+    editingRentalOrderLineIndex = null;
     rentalRows = rentalRows.slice(0, 50);
     save("pillowCalcRentalRows", rentalRows);
     rentalOrder = [];
     save("pillowCalcRentalOrder", rentalOrder);
-    localStorage.setItem("pillowCalcRentalWebhook", payload.webhookUrl);
+    rentalWebhook = payload.webhookUrl;
+    save("pillowCalcRentalWebhook", rentalWebhook);
     els.rentalStatus.textContent = "Отправлено";
     resetRentalForm(payload);
     renderRentalOrder();
     renderRentalRows();
+    renderHistory();
+    renderPl();
   } catch (error) {
     els.rentalStatus.textContent = "Ошибка отправки";
     alert(`Не получилось отправить в Google Таблицу: ${error.message}`);
   } finally {
     els.sendRentalOrder.disabled = false;
+  }
+}
+
+function beanbagCalculation() {
+  const amount = Math.max(0, number(els.beanbagAmount?.value));
+  const delivery = Math.max(0, number(els.beanbagDelivery?.value));
+  const mounting = Math.max(0, number(els.beanbagMounting?.value));
+  const cost = delivery + mounting;
+  const profit = Math.max(0, amount - cost);
+  return {
+    amount,
+    delivery,
+    mounting,
+    cost,
+    profit,
+    dimaProfit: profit / 2,
+    nikitaProfit: profit / 2,
+  };
+}
+
+function renderBeanbagLive() {
+  if (!els.beanbagCost) return;
+  const calc = beanbagCalculation();
+  els.beanbagCost.textContent = money(calc.cost);
+  els.beanbagDima.textContent = money(calc.dimaProfit);
+  els.beanbagNikita.textContent = money(calc.nikitaProfit);
+  els.beanbagProfit.textContent = money(calc.profit);
+}
+
+function beanbagPayload() {
+  const calc = beanbagCalculation();
+  return {
+    orderType: "Кресла мешки",
+    number: nextOrderNumber("beanbag"),
+    date: displayDate(els.beanbagDate.value || todayIso()),
+    whatOrdered: els.beanbagWhat.value.trim(),
+    item: els.beanbagWhat.value.trim(),
+    amount: calc.amount,
+    total: calc.amount,
+    cost: calc.cost,
+    dimaProfit: calc.dimaProfit,
+    nikitaProfit: calc.nikitaProfit,
+    profit: calc.profit,
+    filler: "",
+    paymentTo: els.beanbagPaymentTo.value,
+    result: "",
+    nikitaBalance: "",
+    payment: els.beanbagPayment.value.trim(),
+    deliveryAmount: calc.delivery,
+    mountingAmount: calc.mounting,
+    pickup: els.beanbagPickup.value,
+    deliveryPaidBy: els.beanbagDeliveryPaidBy.value.trim(),
+    status: els.beanbagPayment.value.trim() || "Согласование",
+    quantity: 1,
+    webhookUrl: els.rentalWebhookUrl?.value.trim() || rentalWebhook || "",
+  };
+}
+
+function resetBeanbagForm() {
+  if (!els.beanbagDate) return;
+  els.beanbagDate.value = todayIso();
+  els.beanbagWhat.value = "";
+  els.beanbagAmount.value = 0;
+  els.beanbagDelivery.value = 0;
+  els.beanbagMounting.value = 0;
+  els.beanbagPickup.value = "Нет";
+  els.beanbagPaymentTo.value = "Диме";
+  els.beanbagPayment.value = "";
+  els.beanbagDeliveryPaidBy.value = "";
+  renderBeanbagLive();
+}
+
+function renderBeanbagRows() {
+  if (!els.beanbagBody) return;
+  if (!els.beanbagDate.value) els.beanbagDate.value = todayIso();
+  renderBeanbagLive();
+  if (!beanbagRows.length) {
+    els.beanbagBody.innerHTML = `<tr class="empty-row"><td colspan="11">Заказов по креслам-мешкам пока нет</td></tr>`;
+    return;
+  }
+  els.beanbagBody.innerHTML = beanbagRows.map((row) => `
+    <tr>
+      <td>${escapeHtml(displayDate(row.date))}</td>
+      <td>${escapeHtml(row.whatOrdered || "-")}</td>
+      <td class="numeric">${money(row.amount || 0)}</td>
+      <td class="numeric">${money(row.cost || 0)}</td>
+      <td class="numeric">${money(row.dimaProfit || 0)}</td>
+      <td class="numeric">${money(row.nikitaProfit || 0)}</td>
+      <td class="numeric">${money(row.profit || 0)}</td>
+      <td>${escapeHtml(row.paymentTo || "-")}</td>
+      <td>${escapeHtml(row.payment || "-")}</td>
+      <td class="numeric">${money(row.deliveryAmount || 0)}</td>
+      <td>${escapeHtml(row.deliveryPaidBy || "-")}</td>
+    </tr>
+  `).join("");
+}
+
+async function saveBeanbagOrder() {
+  const payload = beanbagPayload();
+  if (!payload.whatOrdered) {
+    alert("Заполните, что заказали.");
+    return;
+  }
+  if (!payload.webhookUrl) {
+    alert("Сначала вставьте webhook Google Apps Script во вкладке Аренда.");
+    return;
+  }
+  els.saveBeanbagOrder.disabled = true;
+  els.beanbagStatus.textContent = "Сохраняю...";
+  try {
+    const response = await fetch(apiPath("/api/rental"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const result = await response.json();
+    if (!response.ok || !result.ok) {
+      throw new Error(result.error || "Google Таблица не приняла данные");
+    }
+    beanbagRows.unshift({ ...payload, sentAt: new Date().toISOString() });
+    beanbagRows = beanbagRows.slice(0, 100);
+    save("pillowCalcBeanbagRows", beanbagRows);
+    rentalWebhook = payload.webhookUrl;
+    save("pillowCalcRentalWebhook", rentalWebhook);
+    els.beanbagStatus.textContent = "Отправлено";
+    resetBeanbagForm();
+    renderBeanbagRows();
+    renderHistory();
+    renderCrm();
+    renderPl();
+  } catch (error) {
+    els.beanbagStatus.textContent = "Ошибка отправки";
+    alert(`Не получилось отправить в Google Таблицу: ${error.message}`);
+  } finally {
+    els.saveBeanbagOrder.disabled = false;
   }
 }
 
@@ -1503,7 +2334,17 @@ function readSettingsFromEditors() {
   document.querySelectorAll("[data-margin]").forEach((input) => {
     settings.margins[input.dataset.margin][input.dataset.field] = number(input.value);
   });
+  document.querySelectorAll("[data-rental-rate]").forEach((input) => {
+    settings.rentalRates[input.dataset.rentalRate][input.dataset.field] = number(input.value);
+  });
   settings.types = settings.types.filter((type) => type.name);
+  settings.rentalRates = settings.rentalRates
+    .map((rate) => ({
+      days: Math.max(1, number(rate.days, 1)),
+      price: Math.max(0, number(rate.price)),
+      bulkPrice: Math.max(0, number(rate.bulkPrice)),
+    }))
+    .sort((a, b) => a.days - b.days);
 }
 
 function setFormInput(input) {
@@ -1630,7 +2471,7 @@ function updateDraftTotalsFromTable() {
   els.deliveryTotal.textContent = money(delivery.gross);
   els.orderTotal.textContent = money(total);
   els.profitTotal.textContent = money(profit);
-  els.headerTotal.textContent = money(total);
+  if (els.headerTotal) els.headerTotal.textContent = money(total);
 }
 
 function refreshOrderRowCosts() {
@@ -1710,12 +2551,14 @@ async function createProposal() {
     const historyItem = {
       number,
       date: payload.date,
+      orderType: "Подушки",
       title: payload.title,
       quantity: order.reduce((sum, item) => sum + item.input.quantity, 0),
       positionsCount: payload.lines.length,
       vatAmount: payload.totalVat,
       total: payload.total,
       profit: payload.lines.reduce((sum, item) => sum + item.profit, 0),
+      status: "Согласование",
       done: false,
       paid: false,
       docxUrl: docs.docxUrl,
@@ -1881,6 +2724,8 @@ els.saveSettings.addEventListener("click", () => {
   save("pillowCalcSettings", settings);
   renderTypeOptions();
   renderSettings();
+  renderRentalPriceTable();
+  renderRentalLive();
   resetForm();
 });
 
@@ -1889,6 +2734,8 @@ els.resetSettings.addEventListener("click", () => {
   save("pillowCalcSettings", settings);
   renderTypeOptions();
   renderSettings();
+  renderRentalPriceTable();
+  renderRentalLive();
   resetForm();
 });
 
@@ -1932,25 +2779,54 @@ els.stampFile.addEventListener("change", async () => {
 
 els.clearHistory.addEventListener("click", () => {
   history = [];
+  rentalRows = [];
+  beanbagRows = [];
   save("pillowCalcHistory", history);
+  save("pillowCalcRentalRows", rentalRows);
+  save("pillowCalcBeanbagRows", beanbagRows);
+  renderHistory();
+  renderRentalRows();
+  renderBeanbagRows();
+});
+
+els.historyTypeFilter.addEventListener("change", () => {
+  historyTypeFilter = els.historyTypeFilter.value;
   renderHistory();
 });
 
 els.historyBody.addEventListener("click", (event) => {
   if (event.target.closest("[data-history-link]")) return;
+  if (event.target.closest("[data-history-status-kind]")) return;
   const removeButton = event.target.closest("[data-remove-history]");
   const openButton = event.target.closest("[data-open-history-order]");
+  const openRentalButton = event.target.closest("[data-open-history-rental]");
   const saveButton = event.target.closest("[data-save-history-order]");
   const row = event.target.closest("[data-toggle-history]");
 
   if (removeButton) {
-    history.splice(Number(removeButton.dataset.removeHistory), 1);
-    save("pillowCalcHistory", history);
+    const index = Number(removeButton.dataset.removeHistory);
+    const kind = removeButton.dataset.removeKind || "pillow";
+    if (kind === "rental") {
+      rentalRows.splice(index, 1);
+      save("pillowCalcRentalRows", rentalRows);
+      renderRentalRows();
+    } else if (kind === "beanbag") {
+      beanbagRows.splice(index, 1);
+      save("pillowCalcBeanbagRows", beanbagRows);
+      renderBeanbagRows();
+    } else {
+      history.splice(index, 1);
+      save("pillowCalcHistory", history);
+    }
     renderHistory();
     return;
   }
   if (openButton) {
     loadHistoryOrder(Number(openButton.dataset.openHistoryOrder));
+    return;
+  }
+  if (openRentalButton) {
+    loadRentalHistoryOrder(Number(openRentalButton.dataset.openHistoryRental));
     return;
   }
   if (saveButton) {
@@ -1961,6 +2837,12 @@ els.historyBody.addEventListener("click", (event) => {
     const detail = els.historyBody.querySelector(`[data-history-detail="${row.dataset.toggleHistory}"]`);
     if (detail) detail.hidden = !detail.hidden;
   }
+});
+
+els.historyBody.addEventListener("change", (event) => {
+  const select = event.target.closest("[data-history-status-kind]");
+  if (!select) return;
+  setHistoryOrderStatus(select.dataset.historyStatusKind, Number(select.dataset.historyStatusIndex), select.value);
 });
 
 els.historyBody.addEventListener("input", (event) => {
@@ -1974,11 +2856,22 @@ els.crmBody.addEventListener("change", (event) => {
   if (!checkbox) return;
   const index = Number(checkbox.dataset.crmIndex);
   const status = checkbox.dataset.crmStatus;
+  if (checkbox.dataset.crmKind === "rental") {
+    setRentalRowChecks(index, status, checkbox.checked);
+    return;
+  }
   if (!history[index]) return;
   history[index][status] = checkbox.checked;
+  history[index].status = statusFromChecks(history[index].done, history[index].paid, history[index].status);
   save("pillowCalcHistory", history);
   renderCrm();
   renderPl();
+});
+
+els.rentalBody.addEventListener("change", (event) => {
+  const checkbox = event.target.closest("[data-rental-row-status]");
+  if (!checkbox) return;
+  setRentalRowChecks(Number(checkbox.dataset.rentalRowIndex), checkbox.dataset.rentalRowStatus, checkbox.checked);
 });
 
 els.rentalForm.addEventListener("submit", submitRental);
@@ -2005,6 +2898,26 @@ els.rentalColorLines.addEventListener("click", (event) => {
   const lines = readRentalColorLines();
   lines.splice(Number(button.dataset.removeRentalColor), 1);
   renderRentalColorLines(lines.length ? lines : [defaultRentalColorLine()]);
+  renderRentalLive();
+});
+
+els.rentalColorLines.addEventListener("input", renderRentalLive);
+els.rentalColorLines.addEventListener("change", renderRentalLive);
+
+[
+  els.rentalStart,
+  els.rentalStartHour,
+  els.rentalStartMinute,
+  els.rentalEnd,
+  els.rentalEndHour,
+  els.rentalEndMinute,
+  els.rentalPickup,
+  els.rentalDeliveryAmount,
+  els.rentalMountingAmount,
+  els.rentalPaymentTo,
+].forEach((input) => {
+  input?.addEventListener("input", renderRentalLive);
+  input?.addEventListener("change", renderRentalLive);
 });
 
 els.rentalOrderBody.addEventListener("click", (event) => {
@@ -2017,6 +2930,8 @@ els.rentalOrderBody.addEventListener("click", (event) => {
 
 els.clearRentalOrder.addEventListener("click", () => {
   rentalOrder = [];
+  editingRentalRowIndex = null;
+  editingRentalOrderLineIndex = null;
   save("pillowCalcRentalOrder", rentalOrder);
   renderRentalOrder();
 });
@@ -2024,14 +2939,34 @@ els.clearRentalOrder.addEventListener("click", () => {
 els.sendRentalOrder.addEventListener("click", sendRentalOrder);
 
 els.saveRentalWebhook.addEventListener("click", () => {
-  localStorage.setItem("pillowCalcRentalWebhook", els.rentalWebhookUrl.value.trim());
+  rentalWebhook = els.rentalWebhookUrl.value.trim();
+  save("pillowCalcRentalWebhook", rentalWebhook);
   els.rentalStatus.textContent = "Webhook сохранён";
 });
 
 els.clearRentalRows.addEventListener("click", () => {
   rentalRows = [];
+  editingRentalRowIndex = null;
+  editingRentalOrderLineIndex = null;
   save("pillowCalcRentalRows", rentalRows);
   renderRentalRows();
+  renderHistory();
+  renderPl();
+});
+
+[els.beanbagAmount, els.beanbagDelivery, els.beanbagMounting].forEach((input) => {
+  input?.addEventListener("input", renderBeanbagLive);
+});
+
+els.saveBeanbagOrder?.addEventListener("click", saveBeanbagOrder);
+
+els.clearBeanbagRows?.addEventListener("click", () => {
+  beanbagRows = [];
+  save("pillowCalcBeanbagRows", beanbagRows);
+  renderBeanbagRows();
+  renderHistory();
+  renderCrm();
+  renderPl();
 });
 
 els.plMonthTabs.addEventListener("click", (event) => {
@@ -2088,15 +3023,40 @@ els.savePlExpenses.addEventListener("click", () => {
   renderPl();
 });
 
-renderTypeOptions();
-renderSettings();
-renderCompany();
-fillTimeSelects();
-renderRentalDrivers();
-resetForm();
-renderPlExpenses();
-renderOrder();
-renderHistory();
-renderRentalOrder();
-renderRentalRows();
+function renderAll() {
+  renderTypeOptions();
+  renderSettings();
+  renderCompany();
+  fillTimeSelects();
+  renderRentalDrivers();
+  resetForm();
+  renderRentalPriceTable();
+  renderRentalLive();
+  resetBeanbagForm();
+  renderPlExpenses();
+  renderOrder();
+  renderHistory();
+  renderRentalOrder();
+  renderRentalRows();
+  renderBeanbagRows();
+  placeOptionsPanel();
+}
+
+function placeOptionsPanel() {
+  const optionsPanel = document.querySelector(".options-panel");
+  const workspace = document.querySelector("#calculator .workspace");
+  const fabricField = document.querySelector(".calc-fabric-name-field");
+  if (!optionsPanel || !workspace || !fabricField) return;
+  const isMobile = window.matchMedia("(max-width: 640px)").matches;
+  if (isMobile && optionsPanel.parentElement !== fabricField.parentElement) {
+    fabricField.after(optionsPanel);
+  } else if (!isMobile && optionsPanel.parentElement !== workspace) {
+    workspace.append(optionsPanel);
+  }
+}
+
+window.addEventListener("resize", placeOptionsPanel);
+
+renderAll();
+syncDatabaseState();
 

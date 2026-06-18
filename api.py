@@ -22,6 +22,7 @@ from server import (
   build_pdf,
   safe_name,
 )
+from db_store import DatabaseNotConfigured, load_state, save_state
 
 
 def response(status: str, payload: dict):
@@ -40,6 +41,10 @@ def read_payload() -> dict:
   length = int(os.environ.get("CONTENT_LENGTH") or "0")
   raw = sys.stdin.buffer.read(length) if length > 0 else b"{}"
   return json.loads(raw.decode("utf-8") or "{}")
+
+
+def request_method() -> str:
+  return os.environ.get("REQUEST_METHOD", "GET").upper()
 
 
 def public_url(path):
@@ -94,6 +99,23 @@ def handle_rental(payload: dict):
     response("502 Bad Gateway", {"ok": False, "error": str(error)})
 
 
+def handle_state(payload: dict):
+  try:
+    if request_method() == "GET":
+      result = load_state()
+      response("200 OK", {"ok": True, **result})
+      return
+    if request_method() != "POST":
+      response("405 Method Not Allowed", {"ok": False, "error": "Method not allowed."})
+      return
+    result = save_state(payload.get("state") or {}, reason=str(payload.get("reason") or "browser-save"))
+    response("200 OK", result)
+  except DatabaseNotConfigured:
+    response("503 Service Unavailable", {"ok": False, "error": "Database is not configured."})
+  except Exception as error:
+    response("500 Internal Server Error", {"ok": False, "error": str(error)})
+
+
 def main():
   try:
     payload = read_payload()
@@ -104,6 +126,8 @@ def main():
       handle_company_card(payload)
     elif action == "rental":
       handle_rental(payload)
+    elif action == "state":
+      handle_state(payload)
     else:
       response("404 Not Found", {"ok": False, "error": "Unknown API action."})
   except Exception as error:

@@ -6,7 +6,7 @@ DirectoryIndex index.html
 
 <IfModule mod_rewrite.c>
   RewriteEngine On
-  RewriteRule ^api/(proposal|company-card|rental)$ api.py?action=$1 [L,QSA]
+  RewriteRule ^api/(proposal|company-card|rental|state)$ api.py?action=$1 [L,QSA]
   RewriteRule ^(server|avito_telegram_bridge)\.py$ - [F,L]
 </IfModule>
 

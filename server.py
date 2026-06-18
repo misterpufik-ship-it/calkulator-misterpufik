@@ -41,6 +41,7 @@ from avito_telegram_bridge import (
     handle_whatsapp_webhook,
     verify_whatsapp_subscription,
 )
+from db_store import DatabaseNotConfigured, load_state, save_state
 
 ROOT = Path(__file__).resolve().parent
 OUTPUTS = ROOT / "outputs" / "proposals"
@@ -809,6 +810,14 @@ class Handler(SimpleHTTPRequestHandler):
     def do_GET(self):
         url = urlsplit(self.path)
         path = url.path
+        if path == "/api/state":
+            try:
+                self.send_json({"ok": True, **load_state()})
+            except DatabaseNotConfigured:
+                self.send_json({"ok": False, "error": "Database is not configured."}, 503)
+            except Exception as error:
+                self.send_json({"ok": False, "error": str(error)}, 500)
+            return
         if path == "/api/avito/status":
             self.send_json(bridge_status())
             return
@@ -823,6 +832,16 @@ class Handler(SimpleHTTPRequestHandler):
 
     def do_POST(self):
         path = self.path.split("?", 1)[0]
+
+        if path == "/api/state":
+            try:
+                payload = self.read_json_payload()
+                self.send_json(save_state(payload.get("state") or {}, reason=str(payload.get("reason") or "browser-save")))
+            except DatabaseNotConfigured:
+                self.send_json({"ok": False, "error": "Database is not configured."}, 503)
+            except Exception as error:
+                self.send_json({"ok": False, "error": str(error)}, 500)
+            return
 
         if path == "/api/avito/webhook":
             try:
@@ -874,25 +893,8 @@ class Handler(SimpleHTTPRequestHandler):
                 self.send_json({"ok": False, "error": "Укажите корректный URL Google Apps Script webhook."}, 400)
                 return
 
-            row_payload = {
-                "date": payload.get("date", ""),
-                "client": payload.get("client", ""),
-                "phone": payload.get("phone", ""),
-                "driver": payload.get("driver", ""),
-                "item": payload.get("item", ""),
-                "quantity": payload.get("quantity", ""),
-                "amount": payload.get("amount", ""),
-                "startDate": payload.get("startDate", ""),
-                "startTime": payload.get("startTime", ""),
-                "endDate": payload.get("endDate", ""),
-                "endTime": payload.get("endTime", ""),
-                "status": payload.get("status", ""),
-                "colorSummary": payload.get("colorSummary", ""),
-                "colors": payload.get("colors", []),
-                "lines": payload.get("lines", []),
-                "comment": payload.get("comment", ""),
-                "createdAt": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            }
+            row_payload = dict(payload)
+            row_payload["createdAt"] = row_payload.get("createdAt") or datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             data = json.dumps(row_payload, ensure_ascii=False).encode("utf-8")
             request = urllib.request.Request(
                 webhook_url,

@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="robots" content="noindex,nofollow,noarchive" />
     <title>AI-CRM система Misterpufik</title>
-    <link rel="stylesheet" href="styles.css?v=92bd86d-mobile" />
+    <link rel="stylesheet" href="styles.css?v=mobile-options-compact-20260613-2141" />
   </head>
   <body>
     <main class="app">
@@ -18,21 +18,18 @@
           </h1>
           <p>AI-CRM система Misterpufik</p>
         </div>
-        <div class="summary-pill">
-          <span>Заказ</span>
-          <strong id="headerTotal">0 ₽</strong>
-        </div>
-      </header>
 
-      <nav class="tabs" aria-label="Разделы">
-        <button class="tab is-active" type="button" data-tab="calculator">Калькулятор</button>
-        <button class="tab" type="button" data-tab="settings">Значения</button>
-        <button class="tab" type="button" data-tab="company">Реквизиты</button>
-        <button class="tab" type="button" data-tab="history">Заказы</button>
-        <button class="tab" type="button" data-tab="crm">CRM</button>
-        <button class="tab" type="button" data-tab="rental">Аренда</button>
-        <button class="tab" type="button" data-tab="pl">P&amp;L</button>
-      </nav>
+        <nav class="tabs" aria-label="Разделы">
+          <button class="tab is-active" type="button" data-tab="calculator">Подушки</button>
+          <button class="tab" type="button" data-tab="rental">Аренда</button>
+          <button class="tab" type="button" data-tab="beanbags">Кресла мешки</button>
+          <button class="tab" type="button" data-tab="history">Заказы</button>
+          <button class="tab" type="button" data-tab="crm">CRM</button>
+          <button class="tab" type="button" data-tab="settings">Значения</button>
+          <button class="tab" type="button" data-tab="company">Реквизиты</button>
+          <button class="tab" type="button" data-tab="pl">P&amp;L</button>
+        </nav>
+      </header>
 
       <section class="tab-panel is-active" id="calculator">
         <div class="workspace">
@@ -234,6 +231,11 @@
             <h2>Наценка по количеству</h2>
             <div id="marginList" class="editor-list"></div>
           </section>
+
+          <section class="panel">
+            <h2>Аренда груш</h2>
+            <div id="rentalRatesList" class="editor-list"></div>
+          </section>
         </div>
         <div class="settings-actions">
           <button class="primary" type="button" id="saveSettings">Сохранить значения</button>
@@ -276,7 +278,19 @@
         <section class="panel">
           <div class="section-title">
             <h2>Заказы</h2>
-            <button class="danger" type="button" id="clearHistory">Очистить заказы</button>
+            <div class="history-toolbar">
+              <label>
+                Тип заказов
+                <select id="historyTypeFilter">
+                  <option value="all">Все</option>
+                  <option value="Подушки">Подушки</option>
+                  <option value="Аренда">Аренда</option>
+                  <option value="Кресла мешки">Кресла мешки</option>
+                  <option value="Другое">Другое</option>
+                </select>
+              </label>
+              <button class="danger" type="button" id="clearHistory">Очистить заказы</button>
+            </div>
           </div>
           <div class="table-wrap">
             <table>
@@ -284,9 +298,10 @@
                 <tr>
                   <th>Дата</th>
                   <th>Номер</th>
+                  <th>Тип</th>
                   <th>Название</th>
                   <th>Кол-во</th>
-                  <th>НДС, 5%</th>
+                  <th>Статус</th>
                   <th>Сумма</th>
                   <th>Прибыль</th>
                   <th>Документы</th>
@@ -386,8 +401,31 @@
                 <select id="rentalStatusSelect">
                   <option>Согласование</option>
                   <option>Подтвержден</option>
+                  <option>Выполнен</option>
                   <option>Оплачен</option>
                   <option>Отменен</option>
+                </select>
+              </label>
+              <label>
+                Самовывоз
+                <select id="rentalPickup">
+                  <option>Нет</option>
+                  <option>Да</option>
+                </select>
+              </label>
+              <label>
+                Доставка, ₽
+                <input id="rentalDeliveryAmount" type="number" min="0" step="1" value="0" />
+              </label>
+              <label>
+                Монтаж, ₽
+                <input id="rentalMountingAmount" type="number" min="0" step="1" value="0" />
+              </label>
+              <label>
+                Кому оплата
+                <select id="rentalPaymentTo">
+                  <option>Диме</option>
+                  <option>Никита</option>
                 </select>
               </label>
               <label class="wide">
@@ -408,6 +446,14 @@
             <div class="actions">
               <button class="primary" type="submit">Сформировать заказ аренды</button>
             </div>
+            <div class="totals rental-live-totals">
+              <div><span>Суток</span><strong id="rentalLiveDays">1</strong></div>
+              <div><span>Аренда</span><strong id="rentalLiveSubtotal">0 ₽</strong></div>
+              <div><span>Доставка</span><strong id="rentalLiveDelivery">0 ₽</strong></div>
+              <div><span>Прибыль</span><strong id="rentalLiveProfit">0 ₽</strong></div>
+              <div><span>Итого</span><strong id="rentalLiveTotal">0 ₽</strong></div>
+              <div><span>Кому оплата</span><strong id="rentalLivePaymentTo">Диме</strong></div>
+            </div>
           </form>
         </div>
 
@@ -423,9 +469,14 @@
                   <th>Дата оформления</th>
                   <th>Клиент</th>
                   <th>Позиция</th>
+                  <th>Доставка / забор</th>
                   <th>Водитель</th>
                   <th>Разбивка по цветам</th>
                   <th>Кол-во</th>
+                  <th>Доставка</th>
+                  <th>Монтаж</th>
+                  <th>Финальная цена</th>
+                  <th>Прибыль</th>
                   <th></th>
                 </tr>
               </thead>
@@ -435,6 +486,10 @@
           <div class="totals">
             <div><span>Общее количество</span><strong id="rentalOrderQuantity">0</strong></div>
             <div><span>Разбивка по цветам</span><strong id="rentalOrderColorSummary">-</strong></div>
+            <div><span>Доставка</span><strong id="rentalOrderDelivery">0 ₽</strong></div>
+            <div><span>Монтаж</span><strong id="rentalOrderMounting">0 ₽</strong></div>
+            <div><span>Сумма</span><strong id="rentalOrderTotal">0 ₽</strong></div>
+            <div><span>Прибыль</span><strong id="rentalOrderProfit">0 ₽</strong></div>
           </div>
           <div class="actions">
             <button class="primary" type="button" id="sendRentalOrder">Сохранить заказ</button>
@@ -456,7 +511,10 @@
                   <th>Водитель</th>
                   <th>Цвета</th>
                   <th>Кол-во</th>
+                  <th>Сумма</th>
                   <th>Статус</th>
+                  <th>Выполнен</th>
+                  <th>Оплачен</th>
                 </tr>
               </thead>
               <tbody id="rentalBody"></tbody>
@@ -476,15 +534,17 @@
         </section>
 
         <section class="panel order-panel">
-          <h2>Как подключить</h2>
-          <ol class="setup-list">
-            <li>Откройте Google Таблицу.</li>
-            <li>Расширения → Apps Script.</li>
-            <li>Вставьте код из файла <strong>google-apps-script-rental.js</strong>.</li>
-            <li>Развернуть → Новое развертывание → Веб-приложение.</li>
-            <li>Доступ: “Все, у кого есть ссылка”.</li>
-            <li>Скопируйте URL и вставьте в поле webhook.</li>
-          </ol>
+          <details class="rental-details">
+            <summary>Как подключить</summary>
+            <ol class="setup-list">
+              <li>Откройте Google Таблицу.</li>
+              <li>Расширения → Apps Script.</li>
+              <li>Вставьте код из файла <strong>google-apps-script-rental.js</strong>.</li>
+              <li>Развернуть → Новое развертывание → Веб-приложение.</li>
+              <li>Доступ: “Все, у кого есть ссылка”.</li>
+              <li>Скопируйте URL и вставьте в поле webhook.</li>
+            </ol>
+          </details>
         </section>
 
         <section class="panel order-panel rental-drivers-panel">
@@ -498,6 +558,76 @@
             </label>
             <button class="ghost" type="button" id="addRentalDriver">Добавить</button>
             <div class="driver-chip-list" id="rentalDriverList"></div>
+          </div>
+        </section>
+
+        <section class="panel order-panel rental-bottom-details">
+          <details class="rental-details">
+            <summary>Расчёт цены</summary>
+            <div class="rental-price-table" id="rentalPriceTable"></div>
+          </details>
+        </section>
+      </section>
+
+      <section class="tab-panel" id="beanbags">
+        <section class="panel">
+          <div class="section-title">
+            <h2>Кресла мешки</h2>
+            <span id="beanbagStatus">Google Таблица</span>
+          </div>
+          <div class="grid compact beanbag-form">
+            <label>Дата оформления<input id="beanbagDate" type="date" /></label>
+            <label class="wide">Что заказали<input id="beanbagWhat" type="text" placeholder="Например, 10 кресел-груш" /></label>
+            <label>Сумма, ₽<input id="beanbagAmount" type="number" min="0" step="1" value="0" /></label>
+            <label>Доставка, ₽<input id="beanbagDelivery" type="number" min="0" step="1" value="0" /></label>
+            <label>Монтаж, ₽<input id="beanbagMounting" type="number" min="0" step="1" value="0" /></label>
+            <label>Самовывоз
+              <select id="beanbagPickup">
+                <option>Нет</option>
+                <option>Да</option>
+              </select>
+            </label>
+            <label>У кого оплата
+              <select id="beanbagPaymentTo">
+                <option>Диме</option>
+                <option>Никита</option>
+              </select>
+            </label>
+            <label>Оплата<input id="beanbagPayment" type="text" placeholder="Например, оплачено" /></label>
+            <label>Оплатил доставку<input id="beanbagDeliveryPaidBy" type="text" placeholder="Кто оплатил доставку" /></label>
+          </div>
+          <div class="totals">
+            <div><span>Себест.</span><strong id="beanbagCost">0 ₽</strong></div>
+            <div><span>Диме</span><strong id="beanbagDima">0 ₽</strong></div>
+            <div><span>Никите</span><strong id="beanbagNikita">0 ₽</strong></div>
+            <div><span>Прибыль</span><strong id="beanbagProfit">0 ₽</strong></div>
+          </div>
+          <div class="actions">
+            <button class="primary" type="button" id="saveBeanbagOrder">Сохранить заказ</button>
+            <button class="danger" type="button" id="clearBeanbagRows">Очистить список</button>
+          </div>
+        </section>
+
+        <section class="panel order-panel">
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Дата оформления</th>
+                  <th>Что заказали</th>
+                  <th>Сумма</th>
+                  <th>Себест.</th>
+                  <th>Диме</th>
+                  <th>Никите</th>
+                  <th>Прибыль</th>
+                  <th>У кого оплата</th>
+                  <th>Оплата</th>
+                  <th>Доставка</th>
+                  <th>Оплатил доставку</th>
+                </tr>
+              </thead>
+              <tbody id="beanbagBody"></tbody>
+            </table>
           </div>
         </section>
       </section>
@@ -553,6 +683,6 @@
       </div>
     </div>
 
-    <script src="app.js?v=92bd86d-mobile"></script>
+    <script src="app.js?v=mobile-options-compact-20260613-2141"></script>
   </body>
 </html>
