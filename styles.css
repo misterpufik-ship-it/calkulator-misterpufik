@@ -338,17 +338,21 @@ legend {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+  min-height: 30px;
+  height: 30px;
   color: var(--text);
   cursor: pointer;
-  line-height: 1.25;
+  line-height: 30px;
 }
 
 .check input {
   position: relative;
   flex: 0 0 52px;
   width: 52px;
+  min-width: 52px;
   min-height: 30px;
   height: 30px;
+  margin: 0;
   order: 2;
   border: 0;
   border-radius: 999px;
