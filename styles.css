@@ -815,12 +815,12 @@ th.numeric {
   min-height: 36px;
   border-radius: 8px;
   border: 1px solid #9faf9f;
-  padding: 7px 10px;
+  padding: 6px 9px;
   color: var(--accent-dark);
   text-decoration: none;
   background: white;
-  margin-right: 6px;
   font-weight: 700;
+  white-space: nowrap;
 }
 
 .link-btn:hover {
@@ -854,6 +854,20 @@ th.numeric {
   cursor: pointer;
 }
 
+#history th,
+#history td,
+.history-main-row td,
+.history-main-row th {
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+.history-main-row td:nth-child(4) {
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .history-toolbar {
   display: flex;
   gap: 10px;
@@ -871,8 +885,71 @@ th.numeric {
 
 .doc-links {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 6px;
+  align-items: center;
+  white-space: nowrap;
+}
+
+.history-row-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.elba-menu {
+  position: relative;
+  display: inline-flex;
+}
+
+.elba-menu summary {
+  list-style: none;
+  width: 38px;
+  min-height: 36px;
+  border: 1px solid #9faf9f;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: white;
+  color: #1f5f4a;
+  cursor: pointer;
+  font-weight: 900;
+}
+
+.elba-menu summary::-webkit-details-marker {
+  display: none;
+}
+
+.elba-menu[open] summary {
+  background: var(--accent-soft);
+}
+
+.elba-menu-list {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  z-index: 20;
+  min-width: 170px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: white;
+  box-shadow: 0 12px 28px rgba(35, 54, 43, 0.14);
+  padding: 6px;
+}
+
+.elba-menu-list button {
+  width: 100%;
+  min-height: 36px;
+  justify-content: flex-start;
+  border: 0;
+  background: transparent;
+  padding: 8px 10px;
+}
+
+.elba-menu-list button:hover {
+  background: var(--accent-soft);
 }
 
 .history-detail-row > td {

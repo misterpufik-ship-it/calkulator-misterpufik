@@ -1267,11 +1267,15 @@ function renderHistory() {
         ${isPillow && item.pdfUrl ? `<a class="link-btn doc-pdf" href="${item.pdfUrl}" download data-history-link>КП</a>` : ""}
         ${isPillow && item.oksanaDocxUrl ? `<a class="link-btn doc-word" href="${item.oksanaDocxUrl}" download data-history-link>Пошив</a>` : ""}
         ${isPillow && item.oksanaPdfUrl ? `<a class="link-btn doc-pdf" href="${item.oksanaPdfUrl}" download data-history-link>Пошив</a>` : ""}
+        ${isPillow ? renderElbaMenu(item, sourceIndex) : ""}
       </td>
       <td class="numeric">
-        ${isPillow ? `<button class="icon-btn" type="button" data-open-history-order="${sourceIndex}" title="Открыть в калькуляторе">✎</button>` : ""}
-        ${entry.kind === "rental" ? `<button class="icon-btn" type="button" data-open-history-rental="${sourceIndex}" title="Редактировать аренду">✎</button>` : ""}
-        <button class="icon-btn" type="button" data-remove-history="${sourceIndex}" data-remove-kind="${entry.kind}" title="Удалить заказ">×</button>
+        <div class="history-row-actions">
+          ${isPillow ? `<button class="icon-btn" type="button" data-open-history-order="${sourceIndex}" title="Открыть в калькуляторе">✎</button>` : ""}
+          ${entry.kind === "rental" ? `<button class="icon-btn" type="button" data-open-history-rental="${sourceIndex}" title="Редактировать аренду">✎</button>` : ""}
+          <button class="icon-btn" type="button" data-copy-history-order="${sourceIndex}" data-copy-kind="${entry.kind}" title="Копировать заказ">⧉</button>
+          <button class="icon-btn" type="button" data-remove-history="${sourceIndex}" data-remove-kind="${entry.kind}" title="Удалить заказ">×</button>
+        </div>
       </td>
     </tr>
     ${isPillow ? `
@@ -1378,7 +1382,6 @@ function renderHistoryDetails(item, historyIndex) {
         <button class="ghost" type="button" data-open-history-order="${historyIndex}">Открыть в калькуляторе</button>
         <button class="primary" type="button" data-save-history-order="${historyIndex}">Сохранить и обновить документы</button>
       </div>
-      ${renderElbaDocuments(item, historyIndex)}
     </div>
   `;
 }
@@ -1425,6 +1428,19 @@ function renderElbaDocuments(item, historyIndex) {
       </div>
       ${error ? `<div class="elba-error">${escapeHtml(error)}</div>` : ""}
     </div>
+  `;
+}
+
+function renderElbaMenu(item, historyIndex) {
+  const bill = item.elbaDocuments?.bill || {};
+  const documentId = bill.elba_document_id || bill.elbaDocumentId || "";
+  return `
+    <details class="elba-menu" data-elba-menu>
+      <summary title="Эльба" aria-label="Эльба">Э</summary>
+      <div class="elba-menu-list">
+        <button type="button" data-elba-create-bill="${historyIndex}" ${documentId ? "disabled" : ""}>Выставить счёт</button>
+      </div>
+    </details>
   `;
 }
 
@@ -1501,6 +1517,13 @@ function loadHistoryOrder(index) {
   resetForm();
   document.querySelector('[data-tab="calculator"]').click();
   window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+function copyHistoryOrder(index) {
+  loadHistoryOrder(index);
+  isFinalized = true;
+  renderOrder();
+  document.querySelector('[data-tab="calculator"]').click();
 }
 
 function updateHistoryLineTotals(input) {
@@ -3093,6 +3116,7 @@ els.historyBody.addEventListener("click", (event) => {
   const removeButton = event.target.closest("[data-remove-history]");
   const openButton = event.target.closest("[data-open-history-order]");
   const openRentalButton = event.target.closest("[data-open-history-rental]");
+  const copyButton = event.target.closest("[data-copy-history-order]");
   const saveButton = event.target.closest("[data-save-history-order]");
   const elbaCreateButton = event.target.closest("[data-elba-create-bill]");
   const elbaRefreshButton = event.target.closest("[data-elba-refresh-bill]");
@@ -3106,6 +3130,7 @@ els.historyBody.addEventListener("click", (event) => {
     handleElbaAction(Number(elbaRefreshButton.dataset.elbaRefreshBill), "refresh", elbaRefreshButton);
     return;
   }
+  if (event.target.closest("[data-elba-menu]")) return;
   if (removeButton) {
     const index = Number(removeButton.dataset.removeHistory);
     const kind = removeButton.dataset.removeKind || "pillow";
@@ -3130,6 +3155,14 @@ els.historyBody.addEventListener("click", (event) => {
   }
   if (openRentalButton) {
     loadRentalHistoryOrder(Number(openRentalButton.dataset.openHistoryRental));
+    return;
+  }
+  if (copyButton) {
+    const index = Number(copyButton.dataset.copyHistoryOrder);
+    const kind = copyButton.dataset.copyKind || "pillow";
+    if (kind === "rental") copyRentalRow(index);
+    else if (kind === "beanbag") copyBeanbagRow(index);
+    else copyHistoryOrder(index);
     return;
   }
   if (saveButton) {
