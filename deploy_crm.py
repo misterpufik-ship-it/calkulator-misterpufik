@@ -14,6 +14,9 @@ FILES = [
     "api.py",
     "server.py",
     "db_store.py",
+    "elba_client.py",
+    "elba_mapper.py",
+    "elba_service.py",
     "crm.htaccess",
 ]
 

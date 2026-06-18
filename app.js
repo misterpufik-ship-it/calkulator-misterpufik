@@ -137,6 +137,8 @@ let editingRentalOrderLineIndex = null;
 let isFinalized = false;
 let databaseSaveTimer = null;
 let suppressDatabaseSave = false;
+let csrfToken = "";
+const openHistoryDetails = new Set();
 
 const storageKeys = [
   "pillowCalcSettings",
@@ -160,6 +162,15 @@ const els = {
   foamDensity: document.querySelector("#foamDensity"),
   foamDensityField: document.querySelector("#foamDensityField"),
   pillowType: document.querySelector("#pillowType"),
+  customOrder: document.querySelector("#customOrder"),
+  customOrderFields: document.querySelector("#customOrderFields"),
+  customSewingCost: document.querySelector("#customSewingCost"),
+  customMaterial1Cost: document.querySelector("#customMaterial1Cost"),
+  customMaterial2Cost: document.querySelector("#customMaterial2Cost"),
+  customOtherCost: document.querySelector("#customOtherCost"),
+  customTotalCost: document.querySelector("#customTotalCost"),
+  customProfit: document.querySelector("#customProfit"),
+  customSalePrice: document.querySelector("#customSalePrice"),
   paymentType: document.querySelector("#paymentType"),
   fabricPrice: document.querySelector("#fabricPrice"),
   fabricName: document.querySelector("#fabricName"),
@@ -180,6 +191,8 @@ const els = {
   positionTitle: document.querySelector("#positionTitle"),
   orderTitle: document.querySelector("#orderTitle"),
   clientName: document.querySelector("#clientName"),
+  clientRequisites: document.querySelector("#clientRequisites"),
+  clientRequisitesFile: document.querySelector("#clientRequisitesFile"),
   productionTerm: document.querySelector("#productionTerm"),
   deliveryAmount: document.querySelector("#deliveryAmount"),
   addItemButton: document.querySelector("#addItemButton"),
@@ -384,6 +397,31 @@ function save(key, value) {
 
 function apiPath(path) {
   return path.replace(/^\/+/, "");
+}
+
+async function ensureCsrfToken() {
+  if (csrfToken) return csrfToken;
+  const response = await fetch(apiPath("/api/csrf"));
+  const result = await response.json();
+  if (!response.ok || !result.csrfToken) throw new Error(result.error || "Не удалось получить CSRF-токен");
+  csrfToken = result.csrfToken;
+  return csrfToken;
+}
+
+async function crmPost(path, payload) {
+  const token = await ensureCsrfToken();
+  const response = await fetch(apiPath(path), {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-CSRF-Token": token,
+      "X-Requested-With": "XMLHttpRequest",
+    },
+    body: JSON.stringify(payload),
+  });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok || result.ok === false) throw new Error(result.error || "Сервер вернул ошибку");
+  return result;
 }
 
 function currentDatabaseState() {
@@ -614,7 +652,11 @@ function setHistoryOrderStatus(kind, index, status) {
 }
 
 function currentInput() {
+  const customTotalCost = Math.max(0, number(els.customTotalCost?.value));
+  const customProfit = Math.max(0, number(els.customProfit?.value));
+  const customSalePrice = Math.max(0, number(els.customSalePrice?.value, customTotalCost + customProfit));
   return {
+    customOrder: Boolean(els.customOrder?.checked),
     quantity: Math.max(1, number(els.quantity.value, 1)),
     length: Math.max(0, number(els.length.value)),
     width: Math.max(0, number(els.width.value)),
@@ -626,6 +668,13 @@ function currentInput() {
     fabricName: els.fabricName.value.trim(),
     buttonsCount: Math.max(0, number(els.buttonsCount.value)),
     materialLogistics: Math.max(0, number(els.materialLogistics.value, defaultMaterialLogistics(els.pillowType.value))),
+    customSewingCost: Math.max(0, number(els.customSewingCost?.value)),
+    customMaterial1Cost: Math.max(0, number(els.customMaterial1Cost?.value)),
+    customMaterial2Cost: Math.max(0, number(els.customMaterial2Cost?.value)),
+    customOtherCost: Math.max(0, number(els.customOtherCost?.value)),
+    customTotalCost,
+    customProfit,
+    customSalePrice,
     coverOnly: els.coverOnly.checked,
     leatherette: els.leatherette.checked,
     ties: els.ties.checked,
@@ -640,6 +689,7 @@ function orderMeta() {
   return {
     title: els.orderTitle.value.trim() || "Заказ подушек",
     clientName: els.clientName.value.trim(),
+    clientRequisites: els.clientRequisites?.value.trim() || "",
     productionTerm: els.productionTerm.value.trim(),
     deliveryAmount: Math.max(0, number(els.deliveryAmount.value)),
   };
@@ -701,6 +751,41 @@ function usesComboFluff(typeName) {
 }
 
 function calculate(input) {
+  if (input.customOrder) {
+    const sewing = Math.max(0, number(input.customSewingCost));
+    const material1 = Math.max(0, number(input.customMaterial1Cost));
+    const material2 = Math.max(0, number(input.customMaterial2Cost));
+    const other = Math.max(0, number(input.customOtherCost));
+    const fallbackCost = sewing + material1 + material2 + other;
+    const totalCost = Math.max(0, number(input.customTotalCost, fallbackCost));
+    const profit = Math.max(0, number(input.customProfit));
+    const totalPrice = Math.max(0, number(input.customSalePrice, totalCost + profit));
+    return {
+      sideSum: 0,
+      volume: 0,
+      area: 0,
+      fabricArea: 0,
+      baseSewing: sewing,
+      coeff: 1,
+      sewing,
+      assembly: 0,
+      hardware: other,
+      foam: 0,
+      spunbond: 0,
+      syntheticFluff: 0,
+      buttons: 0,
+      fabric: material1 + material2,
+      unitCost: totalCost,
+      quantityCost: totalCost,
+      markup: profit,
+      preVatPrice: totalPrice,
+      vatRate: 0,
+      vatAmount: 0,
+      paymentCoeff: 1,
+      totalCost,
+      totalPrice,
+    };
+  }
   const type = getType(input.type);
   const volume = input.length * input.width * input.height;
   const area = 2 * (input.length * input.width + input.length * input.height + input.width * input.height) * 0.0001;
@@ -838,10 +923,10 @@ function orderPayload(number = nextOrderNumber()) {
   const meta = orderMeta();
   const lines = finalizedOrderLines().map((item, index) => ({
     index: index + 1,
-    type: item.input.type,
+    type: item.input.customOrder ? "Кастомный заказ" : item.input.type,
     positionName: item.positionName || positionLabel(index),
     fabricName: item.input.fabricName || "",
-    size: `${item.input.length} x ${item.input.width} x ${item.input.height} см`,
+    size: item.input.customOrder ? "" : `${item.input.length} x ${item.input.width} x ${item.input.height} см`,
     quantity: item.input.quantity,
     unitPrice: item.finalPrice / item.input.quantity,
     sewingPrice: item.sewingPrice,
@@ -860,6 +945,7 @@ function orderPayload(number = nextOrderNumber()) {
     date: todayRu(),
     title: meta.title,
     clientName: meta.clientName,
+    clientRequisites: meta.clientRequisites,
     productionTerm: meta.productionTerm,
     deliveryAmount: meta.deliveryAmount,
     deliveryGrossAmount: delivery.gross,
@@ -873,7 +959,7 @@ function orderPayload(number = nextOrderNumber()) {
 
 function materialLogisticsSummary() {
   const net = isFinalized
-    ? order.reduce((sum, item) => sum + Math.max(0, number(item.input.materialLogistics, defaultMaterialLogistics(item.input.type))), 0)
+    ? order.reduce((sum, item) => sum + (item.input.customOrder ? 0 : Math.max(0, number(item.input.materialLogistics, defaultMaterialLogistics(item.input.type)))), 0)
     : 0;
   return { net };
 }
@@ -896,6 +982,7 @@ function renderTypeOptions() {
 
 function renderLive() {
   renderPositionTitle();
+  renderCustomOrderVisibility();
   renderFoamDensityVisibility();
   renderButtonsVisibility();
   const input = currentInput();
@@ -903,6 +990,18 @@ function renderLive() {
   els.liveCost.textContent = `Себестоимость: ${money(result.totalCost)}`;
   els.livePrice.textContent = `Цена: ${money(result.totalPrice)}`;
   els.liveProfit.textContent = `Прибыль: ${money(result.totalPrice - result.totalCost)}`;
+  if (input.customOrder) {
+    els.breakdown.innerHTML = [
+      ["Стоимость пошива", money(input.customSewingCost)],
+      ["Стоимость материала 1", money(input.customMaterial1Cost)],
+      ["Стоимость материала 2", money(input.customMaterial2Cost)],
+      ["Другие расходы", money(input.customOtherCost)],
+      ["Итого себестоимость", money(result.totalCost)],
+      ["Прибыль", money(result.totalPrice - result.totalCost)],
+      ["Цена реализации", money(result.totalPrice)],
+    ].map(([label, value]) => `<div><dt>${label}</dt><dd>${value}</dd></div>`).join("");
+    return;
+  }
   els.breakdown.innerHTML = [
     ["Сумма сторон", `${result.sideSum.toFixed(1)} см`],
     ["Базовый пошив", money(result.baseSewing)],
@@ -936,6 +1035,10 @@ function renderPositionTitle() {
 
 function renderFoamDensityVisibility() {
   if (!els.foamDensityField) return;
+  if (els.customOrder?.checked) {
+    els.foamDensityField.classList.add("calc-hidden");
+    return;
+  }
   const typeName = els.pillowType.value;
   const shouldShow = usesFoam(typeName) || usesComboFoam(typeName);
   els.foamDensityField.classList.toggle("calc-hidden", !shouldShow);
@@ -943,9 +1046,21 @@ function renderFoamDensityVisibility() {
 
 function renderButtonsVisibility() {
   if (!els.buttonsCountField) return;
+  if (els.customOrder?.checked) {
+    els.buttonsCountField.classList.add("calc-hidden");
+    return;
+  }
   const shouldShow = els.pillowType.value === "Подушка с пуговицами";
   els.buttonsCountField.classList.toggle("calc-hidden", !shouldShow);
   if (!shouldShow) els.buttonsCount.value = 0;
+}
+
+function renderCustomOrderVisibility() {
+  const isCustom = Boolean(els.customOrder?.checked);
+  document.querySelectorAll("#calcForm .auto-calc-field").forEach((field) => {
+    field.classList.toggle("calc-hidden", isCustom);
+  });
+  els.customOrderFields?.classList.toggle("calc-hidden", !isCustom);
 }
 
 function openBeeModal() {
@@ -1142,7 +1257,7 @@ function renderHistory() {
       </td>
     </tr>
     ${isPillow ? `
-    <tr class="history-detail-row" data-history-detail="${sourceIndex}" hidden>
+    <tr class="history-detail-row" data-history-detail="${sourceIndex}" ${openHistoryDetails.has(sourceIndex) ? "" : "hidden"}>
       <td colspan="10">${renderHistoryDetails(item, sourceIndex)}</td>
     </tr>
     ` : ""}
@@ -1245,8 +1360,107 @@ function renderHistoryDetails(item, historyIndex) {
         <button class="ghost" type="button" data-open-history-order="${historyIndex}">Открыть в калькуляторе</button>
         <button class="primary" type="button" data-save-history-order="${historyIndex}">Сохранить и обновить документы</button>
       </div>
+      ${renderElbaDocuments(item, historyIndex)}
     </div>
   `;
+}
+
+function elbaOrderPayload(item, historyIndex) {
+  return {
+    kind: "pillow",
+    sourceIndex: historyIndex,
+    orderType: item.orderType || "Подушки",
+    number: item.number || prefixedOrderNumber("pillow", item.number, historyIndex),
+    date: item.date,
+    title: item.title,
+    clientName: item.payload?.clientName || item.meta?.clientName || "",
+    clientRequisites: item.payload?.clientRequisites || item.meta?.clientRequisites || "",
+    deliveryAmount: item.payload?.deliveryAmount || 0,
+    deliveryGrossAmount: item.payload?.deliveryGrossAmount || 0,
+    lines: item.payload?.lines || [],
+    total: item.total,
+  };
+}
+
+function renderElbaDocuments(item, historyIndex) {
+  const bill = item.elbaDocuments?.bill || {};
+  const status = bill.status || "Не создан";
+  const documentId = bill.elba_document_id || bill.elbaDocumentId || "";
+  const error = bill.error_message || bill.errorMessage || "";
+  const pdfUrl = bill.pdfUrl || "";
+  return `
+    <div class="elba-box" data-elba-box="${historyIndex}">
+      <div class="section-title compact-title">
+        <div>
+          <span class="rental-item-label">Документы Эльба</span>
+          <h3>Счёт по заказу</h3>
+        </div>
+        <div class="elba-actions">
+          <button class="primary" type="button" data-elba-create-bill="${historyIndex}" ${documentId ? "disabled" : ""}>Выставить счёт</button>
+          <button class="ghost" type="button" data-elba-refresh-bill="${historyIndex}" ${documentId ? "" : "disabled"}>Обновить статус</button>
+          ${pdfUrl ? `<a class="link-btn doc-pdf" href="${pdfUrl}" download data-history-link>Скачать счёт</a>` : ""}
+        </div>
+      </div>
+      <div class="elba-grid">
+        <div><span>Статус счёта</span><strong>${escapeHtml(status)}</strong></div>
+        <div><span>ID в Эльбе</span><strong>${escapeHtml(documentId || "-")}</strong></div>
+      </div>
+      ${error ? `<div class="elba-error">${escapeHtml(error)}</div>` : ""}
+    </div>
+  `;
+}
+
+function applyElbaResult(historyIndex, result) {
+  const item = history[historyIndex];
+  if (!item) return;
+  openHistoryDetails.add(historyIndex);
+  item.elbaDocuments = item.elbaDocuments || {};
+  if (result.document) item.elbaDocuments.bill = result.document;
+  if (result.pdfUrl) {
+    item.elbaDocuments.bill = { ...(item.elbaDocuments.bill || {}), pdfUrl: result.pdfUrl };
+  }
+  save("pillowCalcHistory", history);
+  renderHistory();
+}
+
+async function handleElbaAction(historyIndex, action, button) {
+  const item = history[historyIndex];
+  if (!item) return;
+  const labels = {
+    create: "Выставляю...",
+    refresh: "Обновляю...",
+    pdf: "Скачиваю...",
+  };
+  const previousText = button?.textContent || "";
+  if (button) {
+    button.disabled = true;
+    button.textContent = labels[action] || "Работаю...";
+  }
+  try {
+    const order = elbaOrderPayload(item, historyIndex);
+    const path = action === "refresh" ? "/api/elba/bills/status" : action === "pdf" ? "/api/elba/bills/pdf" : "/api/elba/bills";
+    const result = await crmPost(path, { order });
+    applyElbaResult(historyIndex, result);
+    if (result.pdfUrl) {
+      const link = document.createElement("a");
+      link.href = result.pdfUrl;
+      link.download = "";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    }
+  } catch (error) {
+    openHistoryDetails.add(historyIndex);
+    item.elbaDocuments = item.elbaDocuments || {};
+    item.elbaDocuments.bill = { ...(item.elbaDocuments.bill || {}), errorMessage: error.message };
+    save("pillowCalcHistory", history);
+    renderHistory();
+  } finally {
+    if (button) {
+      button.disabled = false;
+      button.textContent = previousText;
+    }
+  }
 }
 
 function loadHistoryOrder(index) {
@@ -1259,6 +1473,7 @@ function loadHistoryOrder(index) {
   const meta = item.meta || {};
   els.orderTitle.value = meta.title || item.title || "";
   els.clientName.value = meta.clientName || item.payload?.clientName || "";
+  if (els.clientRequisites) els.clientRequisites.value = meta.clientRequisites || item.payload?.clientRequisites || "";
   els.productionTerm.value = meta.productionTerm || item.payload?.productionTerm || "";
   els.deliveryAmount.value = number(meta.deliveryAmount, item.payload?.deliveryAmount || 0);
   editingIndex = null;
@@ -2035,7 +2250,7 @@ function renderRentalRows() {
   if (!els.rentalBody) return;
 
   if (!rentalRows.length) {
-    els.rentalBody.innerHTML = `<tr class="empty-row"><td colspan="10">Заказы аренды пока не отправлялись</td></tr>`;
+    els.rentalBody.innerHTML = `<tr class="empty-row"><td colspan="11">Заказы аренды пока не отправлялись</td></tr>`;
     return;
   }
 
@@ -2051,8 +2266,18 @@ function renderRentalRows() {
       <td>${escapeHtml(row.status || "-")}</td>
       <td class="numeric"><input class="status-check" type="checkbox" data-rental-row-status="done" data-rental-row-index="${index}" ${orderDone(row) ? "checked" : ""} /></td>
       <td class="numeric"><input class="status-check" type="checkbox" data-rental-row-status="paid" data-rental-row-index="${index}" ${orderPaid(row) ? "checked" : ""} /></td>
+      <td class="numeric"><button class="icon-btn" type="button" data-copy-rental-row="${index}" title="Копировать заказ">⧉</button></td>
     </tr>
   `).join("");
+}
+
+function copyRentalRow(index) {
+  const source = rentalRows[index];
+  if (!source) return;
+  loadRentalHistoryOrder(index);
+  editingRentalRowIndex = null;
+  editingRentalOrderLineIndex = null;
+  els.rentalStatus.textContent = "Заказ скопирован как новый";
 }
 
 function setRentalRowChecks(index, field, checked) {
@@ -2256,10 +2481,10 @@ function renderBeanbagRows() {
   if (!els.beanbagDate.value) els.beanbagDate.value = todayIso();
   renderBeanbagLive();
   if (!beanbagRows.length) {
-    els.beanbagBody.innerHTML = `<tr class="empty-row"><td colspan="11">Заказов по креслам-мешкам пока нет</td></tr>`;
+    els.beanbagBody.innerHTML = `<tr class="empty-row"><td colspan="12">Заказов по креслам-мешкам пока нет</td></tr>`;
     return;
   }
-  els.beanbagBody.innerHTML = beanbagRows.map((row) => `
+  els.beanbagBody.innerHTML = beanbagRows.map((row, index) => `
     <tr>
       <td>${escapeHtml(displayDate(row.date))}</td>
       <td>${escapeHtml(row.whatOrdered || "-")}</td>
@@ -2272,8 +2497,26 @@ function renderBeanbagRows() {
       <td>${escapeHtml(row.payment || "-")}</td>
       <td class="numeric">${money(row.deliveryAmount || 0)}</td>
       <td>${escapeHtml(row.deliveryPaidBy || "-")}</td>
+      <td class="numeric"><button class="icon-btn" type="button" data-copy-beanbag-row="${index}" title="Копировать заказ">⧉</button></td>
     </tr>
   `).join("");
+}
+
+function copyBeanbagRow(index) {
+  const row = beanbagRows[index];
+  if (!row) return;
+  els.beanbagDate.value = inputDateValue(row.date) || todayIso();
+  els.beanbagWhat.value = row.whatOrdered || row.item || "";
+  els.beanbagAmount.value = number(row.amount);
+  els.beanbagDelivery.value = number(row.deliveryAmount);
+  els.beanbagMounting.value = number(row.mountingAmount);
+  els.beanbagPickup.value = row.pickup || "Нет";
+  els.beanbagPaymentTo.value = row.paymentTo || "Диме";
+  els.beanbagPayment.value = "";
+  els.beanbagDeliveryPaidBy.value = row.deliveryPaidBy || "";
+  els.beanbagStatus.textContent = "Заказ скопирован как новый";
+  renderBeanbagLive();
+  document.querySelector('[data-tab="beanbags"]').click();
 }
 
 async function saveBeanbagOrder() {
@@ -2348,6 +2591,7 @@ function readSettingsFromEditors() {
 }
 
 function setFormInput(input) {
+  if (els.customOrder) els.customOrder.checked = Boolean(input.customOrder);
   els.quantity.value = input.quantity;
   els.length.value = input.length;
   els.width.value = input.width;
@@ -2359,6 +2603,13 @@ function setFormInput(input) {
   els.fabricName.value = input.fabricName || "";
   els.buttonsCount.value = input.buttonsCount;
   els.materialLogistics.value = number(input.materialLogistics, defaultMaterialLogistics(input.type));
+  if (els.customSewingCost) els.customSewingCost.value = number(input.customSewingCost);
+  if (els.customMaterial1Cost) els.customMaterial1Cost.value = number(input.customMaterial1Cost);
+  if (els.customMaterial2Cost) els.customMaterial2Cost.value = number(input.customMaterial2Cost);
+  if (els.customOtherCost) els.customOtherCost.value = number(input.customOtherCost);
+  if (els.customTotalCost) els.customTotalCost.value = number(input.customTotalCost);
+  if (els.customProfit) els.customProfit.value = number(input.customProfit);
+  if (els.customSalePrice) els.customSalePrice.value = number(input.customSalePrice);
   els.coverOnly.checked = input.coverOnly;
   els.leatherette.checked = input.leatherette;
   els.ties.checked = input.ties;
@@ -2385,6 +2636,14 @@ function resetForm() {
     fabricName: "",
     buttonsCount: 0,
     materialLogistics: defaultMaterialLogistics(settings.types[0]?.name || ""),
+    customOrder: false,
+    customSewingCost: 0,
+    customMaterial1Cost: 0,
+    customMaterial2Cost: 0,
+    customOtherCost: 0,
+    customTotalCost: 0,
+    customProfit: 0,
+    customSalePrice: 0,
     coverOnly: false,
     leatherette: false,
     ties: false,
@@ -2598,12 +2857,21 @@ els.pillowType.addEventListener("change", () => {
   renderLive();
 });
 ["input", "change"].forEach((eventName) => {
-  [els.deliveryAmount, els.orderTitle, els.clientName, els.productionTerm].forEach((input) => {
+  [els.deliveryAmount, els.orderTitle, els.clientName, els.clientRequisites, els.productionTerm].filter(Boolean).forEach((input) => {
     input.addEventListener(eventName, () => {
       isFinalized = false;
       renderOrder();
     });
   });
+});
+
+els.clientRequisitesFile?.addEventListener("change", async () => {
+  const file = els.clientRequisitesFile.files?.[0];
+  if (!file) return;
+  const text = await file.text();
+  els.clientRequisites.value = [els.clientRequisites.value.trim(), text.trim()].filter(Boolean).join("\n");
+  els.clientRequisitesFile.value = "";
+  isFinalized = false;
 });
 
 els.form.addEventListener("submit", (event) => {
@@ -2801,8 +3069,18 @@ els.historyBody.addEventListener("click", (event) => {
   const openButton = event.target.closest("[data-open-history-order]");
   const openRentalButton = event.target.closest("[data-open-history-rental]");
   const saveButton = event.target.closest("[data-save-history-order]");
+  const elbaCreateButton = event.target.closest("[data-elba-create-bill]");
+  const elbaRefreshButton = event.target.closest("[data-elba-refresh-bill]");
   const row = event.target.closest("[data-toggle-history]");
 
+  if (elbaCreateButton) {
+    handleElbaAction(Number(elbaCreateButton.dataset.elbaCreateBill), "create", elbaCreateButton);
+    return;
+  }
+  if (elbaRefreshButton) {
+    handleElbaAction(Number(elbaRefreshButton.dataset.elbaRefreshBill), "refresh", elbaRefreshButton);
+    return;
+  }
   if (removeButton) {
     const index = Number(removeButton.dataset.removeHistory);
     const kind = removeButton.dataset.removeKind || "pillow";
@@ -2835,7 +3113,12 @@ els.historyBody.addEventListener("click", (event) => {
   }
   if (row) {
     const detail = els.historyBody.querySelector(`[data-history-detail="${row.dataset.toggleHistory}"]`);
-    if (detail) detail.hidden = !detail.hidden;
+    const index = Number(row.dataset.toggleHistory);
+    if (detail) {
+      detail.hidden = !detail.hidden;
+      if (detail.hidden) openHistoryDetails.delete(index);
+      else openHistoryDetails.add(index);
+    }
   }
 });
 
@@ -2872,6 +3155,12 @@ els.rentalBody.addEventListener("change", (event) => {
   const checkbox = event.target.closest("[data-rental-row-status]");
   if (!checkbox) return;
   setRentalRowChecks(Number(checkbox.dataset.rentalRowIndex), checkbox.dataset.rentalRowStatus, checkbox.checked);
+});
+
+els.rentalBody.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-copy-rental-row]");
+  if (!button) return;
+  copyRentalRow(Number(button.dataset.copyRentalRow));
 });
 
 els.rentalForm.addEventListener("submit", submitRental);
@@ -2959,6 +3248,12 @@ els.clearRentalRows.addEventListener("click", () => {
 });
 
 els.saveBeanbagOrder?.addEventListener("click", saveBeanbagOrder);
+
+els.beanbagBody?.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-copy-beanbag-row]");
+  if (!button) return;
+  copyBeanbagRow(Number(button.dataset.copyBeanbagRow));
+});
 
 els.clearBeanbagRows?.addEventListener("click", () => {
   beanbagRows = [];

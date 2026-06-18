@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import base64
+import http.cookies
 import html
 import json
+import logging
 import mimetypes
 import os
 import re
+import secrets
 import tempfile
 import urllib.error
 import urllib.request
@@ -42,10 +45,15 @@ from avito_telegram_bridge import (
     verify_whatsapp_subscription,
 )
 from db_store import DatabaseNotConfigured, load_state, save_state
+from elba_client import ElbaAuthError, ElbaConfigError, ElbaError, ElbaValidationError
+from elba_service import ElbaService
 
 ROOT = Path(__file__).resolve().parent
 OUTPUTS = ROOT / "outputs" / "proposals"
 OUTPUTS.mkdir(parents=True, exist_ok=True)
+ELBA_SERVICE = ElbaService(OUTPUTS)
+CSRF_TOKENS: set[str] = set()
+logging.basicConfig(level=os.environ.get("LOG_LEVEL", "INFO"))
 LOGO_PATH = ROOT / "assets" / "logo.png"
 SIGNATURE_STAMP_PATH = ROOT / "assets" / "signature_stamp.png"
 BLACK = RGBColor(20, 20, 20)
@@ -807,9 +815,61 @@ class Handler(SimpleHTTPRequestHandler):
             return {}
         return json.loads(raw_body.decode("utf-8"))
 
+    def send_elba_error(self, error: Exception):
+        if isinstance(error, ElbaConfigError):
+            self.send_json({"ok": False, "error": str(error)}, 503)
+            return
+        if isinstance(error, ElbaAuthError):
+            self.send_json({"ok": False, "error": "Неверный API-ключ Эльбы или нет доступа к организации."}, 401)
+            return
+        if isinstance(error, (ElbaValidationError, ValueError)):
+            self.send_json({"ok": False, "error": str(error)}, 400)
+            return
+        if isinstance(error, ElbaError):
+            self.send_json({"ok": False, "error": str(error)}, 502)
+            return
+        if isinstance(error, DatabaseNotConfigured):
+            self.send_json({"ok": False, "error": "База данных не настроена в .env."}, 503)
+            return
+        self.send_json({"ok": False, "error": "Не получилось выполнить действие в Эльбе."}, 500)
+
+    def csrf_token_from_cookie(self) -> str:
+        cookie = http.cookies.SimpleCookie(self.headers.get("Cookie", ""))
+        morsel = cookie.get("crm_csrf")
+        return morsel.value if morsel else ""
+
+    def validate_crm_post(self) -> bool:
+        if self.headers.get("X-Requested-With") != "XMLHttpRequest":
+            self.send_json({"ok": False, "error": "Запрос отклонён: действие доступно только из CRM."}, 403)
+            return False
+        host = self.headers.get("Host", "")
+        origin = self.headers.get("Origin") or self.headers.get("Referer") or ""
+        if origin:
+            parsed = urlsplit(origin)
+            if parsed.netloc and parsed.netloc != host:
+                self.send_json({"ok": False, "error": "Запрос отклонён: неверный источник."}, 403)
+                return False
+        header_token = self.headers.get("X-CSRF-Token", "")
+        cookie_token = self.csrf_token_from_cookie()
+        if not header_token or header_token != cookie_token or header_token not in CSRF_TOKENS:
+            self.send_json({"ok": False, "error": "CSRF-токен устарел. Обновите страницу и повторите действие."}, 403)
+            return False
+        return True
+
     def do_GET(self):
         url = urlsplit(self.path)
         path = url.path
+        if path == "/api/csrf":
+            token = secrets.token_urlsafe(32)
+            CSRF_TOKENS.add(token)
+            self.send_response(200)
+            body = json.dumps({"ok": True, "csrfToken": token}, ensure_ascii=False).encode("utf-8")
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.send_header("Set-Cookie", f"crm_csrf={token}; Path=/; SameSite=Strict")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
         if path == "/api/state":
             try:
                 self.send_json({"ok": True, **load_state()})
@@ -820,6 +880,12 @@ class Handler(SimpleHTTPRequestHandler):
             return
         if path == "/api/avito/status":
             self.send_json(bridge_status())
+            return
+        if path == "/api/elba/status":
+            try:
+                self.send_json(ELBA_SERVICE.check_connection())
+            except Exception as error:
+                self.send_elba_error(error)
             return
         if path == "/api/whatsapp/webhook":
             try:
@@ -832,6 +898,29 @@ class Handler(SimpleHTTPRequestHandler):
 
     def do_POST(self):
         path = self.path.split("?", 1)[0]
+
+        if path.startswith("/api/elba/"):
+            if not self.validate_crm_post():
+                return
+            try:
+                payload = self.read_json_payload()
+                order_payload = payload.get("order") or {}
+                if path == "/api/elba/bills":
+                    self.send_json(ELBA_SERVICE.create_bill(order_payload))
+                    return
+                if path == "/api/elba/bills/status":
+                    self.send_json(ELBA_SERVICE.refresh_bill_status(order_payload))
+                    return
+                if path == "/api/elba/bills/pdf":
+                    self.send_json(ELBA_SERVICE.get_bill_pdf(order_payload))
+                    return
+                if path == "/api/elba/closing-documents":
+                    self.send_json(ELBA_SERVICE.create_closing_document(order_payload, str(payload.get("documentType") or "")))
+                    return
+                self.send_error(404)
+            except Exception as error:
+                self.send_elba_error(error)
+            return
 
         if path == "/api/state":
             try:

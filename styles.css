@@ -244,12 +244,30 @@ button {
   grid-template-columns: repeat(4, minmax(104px, 1fr));
 }
 
+.custom-order-toggle {
+  grid-column: 1 / -1;
+  max-width: 260px;
+}
+
 .calc-type-field {
   grid-column: span 2;
 }
 
 .calc-fabric-name-field {
   grid-column: span 2;
+}
+
+.custom-order-fields {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(104px, 1fr));
+  gap: 14px;
+}
+
+.custom-order-fields label:nth-child(5),
+.custom-order-fields label:nth-child(6),
+.custom-order-fields label:nth-child(7) {
+  grid-column: span 1;
 }
 
 .calc-buttons-field {
@@ -880,6 +898,45 @@ th.numeric {
 .history-detail-empty {
   color: var(--muted);
   padding: 12px;
+}
+
+.elba-box {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px;
+  background: #ffffff;
+}
+
+.elba-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.elba-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(160px, 1fr));
+  gap: 10px;
+}
+
+.elba-grid > div {
+  display: grid;
+  gap: 4px;
+}
+
+.elba-grid span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.elba-error {
+  margin-top: 10px;
+  color: #a33a3a;
+  background: #fff4f4;
+  border: 1px solid #f2c9c9;
+  border-radius: 8px;
+  padding: 10px;
 }
 
 .company-fields {

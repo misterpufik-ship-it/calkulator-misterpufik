@@ -45,27 +45,30 @@
             </div>
 
             <div class="grid calc-grid">
-              <label class="calc-small-field">
+              <label class="check custom-order-toggle">
+                <input id="customOrder" type="checkbox" /> Кастомный заказ
+              </label>
+              <label class="calc-small-field auto-calc-field">
                 Длина, см
                 <input id="length" type="number" min="1" step="0.1" value="49" required />
               </label>
-              <label class="calc-small-field">
+              <label class="calc-small-field auto-calc-field">
                 Ширина, см
                 <input id="width" type="number" min="1" step="0.1" value="49" required />
               </label>
-              <label class="calc-small-field">
+              <label class="calc-small-field auto-calc-field">
                 Высота, см
                 <input id="height" type="number" min="1" step="0.1" value="5" required />
               </label>
-              <label class="calc-small-field">
+              <label class="calc-small-field auto-calc-field">
                 Количество
                 <input id="quantity" type="number" min="1" step="1" value="1" required />
               </label>
-              <label class="calc-type-field">
+              <label class="calc-type-field auto-calc-field">
                 Тип подушки
                 <select id="pillowType"></select>
               </label>
-              <label class="calc-foam-field" id="foamDensityField">
+              <label class="calc-foam-field auto-calc-field" id="foamDensityField">
                 Плотность поролона
                 <select id="foamDensity">
                   <option value="25" selected>25</option>
@@ -74,29 +77,59 @@
                   <option value="40">40</option>
                 </select>
               </label>
-              <label class="calc-fabric-field">
+              <label class="calc-fabric-field auto-calc-field">
                 Цена ткани, ₽/м²
                 <input id="fabricPrice" type="number" min="0" step="1" value="600" />
               </label>
-              <label class="calc-payment-field">
+              <label class="calc-payment-field auto-calc-field">
                 Форма оплаты
                 <select id="paymentType">
                   <option value="cash">Наличка</option>
                   <option value="cashless" selected>Безнал</option>
                 </select>
               </label>
-              <label class="calc-logistics-field">
+              <label class="calc-logistics-field auto-calc-field">
                 Логистика материала, ₽
                 <input id="materialLogistics" type="number" min="0" step="1" value="1000" />
               </label>
-              <label class="calc-fabric-name-field">
+              <label class="calc-fabric-name-field auto-calc-field">
                 Ткань
                 <input id="fabricName" type="text" placeholder="Например, велюр" />
               </label>
-              <div class="calc-buttons-field" id="buttonsCountField">
+              <div class="calc-buttons-field auto-calc-field" id="buttonsCountField">
                 <label>
                   Пуговицы, шт
                   <input id="buttonsCount" type="number" min="0" step="1" value="0" />
+                </label>
+              </div>
+              <div class="custom-order-fields calc-hidden" id="customOrderFields">
+                <label>
+                  Стоимость пошива
+                  <input id="customSewingCost" type="number" min="0" step="1" value="0" />
+                </label>
+                <label>
+                  Стоимость материала 1
+                  <input id="customMaterial1Cost" type="number" min="0" step="1" value="0" />
+                </label>
+                <label>
+                  Стоимость материала 2
+                  <input id="customMaterial2Cost" type="number" min="0" step="1" value="0" />
+                </label>
+                <label>
+                  Другие расходы
+                  <input id="customOtherCost" type="number" min="0" step="1" value="0" />
+                </label>
+                <label>
+                  Итого себестоимость
+                  <input id="customTotalCost" type="number" min="0" step="1" value="0" />
+                </label>
+                <label>
+                  Прибыль
+                  <input id="customProfit" type="number" min="0" step="1" value="0" />
+                </label>
+                <label>
+                  Цена реализации
+                  <input id="customSalePrice" type="number" min="0" step="1" value="0" />
                 </label>
               </div>
             </div>
@@ -146,6 +179,14 @@
             <label>
               Клиент
               <input id="clientName" type="text" placeholder="ФИО или компания клиента" />
+            </label>
+            <label class="wide">
+              Реквизиты клиента
+              <textarea id="clientRequisites" rows="3" placeholder="Вставьте ИНН, адрес, банк и другие реквизиты"></textarea>
+            </label>
+            <label>
+              Реквизиты файлом
+              <input id="clientRequisitesFile" type="file" accept=".txt,.csv,.md,.rtf" />
             </label>
             <label>
               Срок изготовления
@@ -516,6 +557,7 @@
                   <th>Статус</th>
                   <th>Выполнен</th>
                   <th>Оплачен</th>
+                  <th></th>
                 </tr>
               </thead>
               <tbody id="rentalBody"></tbody>
@@ -625,6 +667,7 @@
                   <th>Оплата</th>
                   <th>Доставка</th>
                   <th>Оплатил доставку</th>
+                  <th></th>
                 </tr>
               </thead>
               <tbody id="beanbagBody"></tbody>

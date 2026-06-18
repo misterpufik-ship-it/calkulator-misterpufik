@@ -82,7 +82,113 @@ def ensure_schema(connection) -> None:
             ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
             """
         )
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS order_elba_documents (
+                id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+                order_id VARCHAR(128) NOT NULL,
+                elba_document_id VARCHAR(128) NULL,
+                document_type ENUM('bill', 'act', 'upd', 'delivery_note') NOT NULL,
+                status VARCHAR(64) NULL,
+                payload_json LONGTEXT NULL,
+                response_json LONGTEXT NULL,
+                error_message TEXT NULL,
+                created_at DATETIME NOT NULL,
+                updated_at DATETIME NOT NULL,
+                synced_at DATETIME NULL,
+                UNIQUE KEY uq_order_elba_document (order_id, document_type),
+                INDEX idx_elba_document_id (elba_document_id),
+                INDEX idx_order_document_type (order_id, document_type)
+            ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
+            """
+        )
     connection.commit()
+
+
+def _json_or_none(value: Any) -> str | None:
+    if value is None:
+        return None
+    return json.dumps(value, ensure_ascii=False, separators=(",", ":"))
+
+
+def _decode_document_row(row: dict[str, Any] | None) -> dict[str, Any] | None:
+    if not row:
+        return None
+    for key in ("payload_json", "response_json"):
+        if row.get(key):
+            try:
+                row[key] = json.loads(row[key])
+            except json.JSONDecodeError:
+                pass
+    for key in ("created_at", "updated_at", "synced_at"):
+        if row.get(key) and hasattr(row[key], "isoformat"):
+            row[key] = row[key].isoformat()
+    return row
+
+
+def get_elba_document(order_id: str, document_type: str = "bill") -> dict[str, Any] | None:
+    with connect() as connection:
+        ensure_schema(connection)
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT *
+                FROM order_elba_documents
+                WHERE order_id = %s AND document_type = %s
+                LIMIT 1
+                """,
+                (order_id, document_type),
+            )
+            return _decode_document_row(cursor.fetchone())
+
+
+def upsert_elba_document(
+    order_id: str,
+    document_type: str,
+    *,
+    elba_document_id: str | None = None,
+    status: str | None = None,
+    payload: Any = None,
+    response: Any = None,
+    error_message: str | None = None,
+    synced_at: datetime | None = None,
+) -> dict[str, Any]:
+    now = datetime.now()
+    with connect() as connection:
+        ensure_schema(connection)
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                INSERT INTO order_elba_documents (
+                    order_id, elba_document_id, document_type, status,
+                    payload_json, response_json, error_message,
+                    created_at, updated_at, synced_at
+                )
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                ON DUPLICATE KEY UPDATE
+                    elba_document_id = COALESCE(VALUES(elba_document_id), elba_document_id),
+                    status = COALESCE(VALUES(status), status),
+                    payload_json = COALESCE(VALUES(payload_json), payload_json),
+                    response_json = COALESCE(VALUES(response_json), response_json),
+                    error_message = VALUES(error_message),
+                    updated_at = VALUES(updated_at),
+                    synced_at = COALESCE(VALUES(synced_at), synced_at)
+                """,
+                (
+                    order_id,
+                    elba_document_id,
+                    document_type,
+                    status,
+                    _json_or_none(payload),
+                    _json_or_none(response),
+                    error_message,
+                    now,
+                    now,
+                    synced_at,
+                ),
+            )
+        connection.commit()
+    return get_elba_document(order_id, document_type) or {}
 
 
 def load_state(state_key: str = "main") -> dict[str, Any]:
