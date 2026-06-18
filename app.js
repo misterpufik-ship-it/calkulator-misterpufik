@@ -757,9 +757,11 @@ function calculate(input) {
     const material2 = Math.max(0, number(input.customMaterial2Cost));
     const other = Math.max(0, number(input.customOtherCost));
     const fallbackCost = sewing + material1 + material2 + other;
-    const totalCost = Math.max(0, number(input.customTotalCost, fallbackCost));
+    const enteredTotalCost = Number(input.customTotalCost);
+    const totalCost = enteredTotalCost > 0 ? enteredTotalCost : fallbackCost;
     const profit = Math.max(0, number(input.customProfit));
-    const totalPrice = Math.max(0, number(input.customSalePrice, totalCost + profit));
+    const enteredSalePrice = Number(input.customSalePrice);
+    const totalPrice = enteredSalePrice > 0 ? enteredSalePrice : totalCost + profit;
     return {
       sideSum: 0,
       volume: 0,
@@ -1063,6 +1065,20 @@ function renderCustomOrderVisibility() {
   els.customOrderFields?.classList.toggle("calc-hidden", !isCustom);
 }
 
+function syncCustomOrderInputs(changedInput) {
+  if (!els.customOrder?.checked || !changedInput?.id) return;
+  const costPartIds = ["customSewingCost", "customMaterial1Cost", "customMaterial2Cost", "customOtherCost"];
+  if (costPartIds.includes(changedInput.id)) {
+    const totalCost = costPartIds.reduce((sum, id) => sum + Math.max(0, number(els[id]?.value)), 0);
+    if (els.customTotalCost) els.customTotalCost.value = Math.round(totalCost);
+  }
+  if ([...costPartIds, "customTotalCost", "customProfit"].includes(changedInput.id)) {
+    const totalCost = Math.max(0, number(els.customTotalCost?.value));
+    const profit = Math.max(0, number(els.customProfit?.value));
+    if (els.customSalePrice) els.customSalePrice.value = Math.round(totalCost + profit);
+  }
+}
+
 function openBeeModal() {
   if (!els.beeModal) return;
   els.beeModal.classList.add("is-open");
@@ -1081,18 +1097,20 @@ function renderOrder() {
     els.orderBody.innerHTML = `<tr class="empty-row"><td colspan="12">Позиции пока не добавлены</td></tr>`;
   } else {
     const rows = lines.map((item, index) => {
-      const size = `${item.input.length} x ${item.input.width} x ${item.input.height} см`;
+      const isCustom = Boolean(item.input.customOrder);
+      const typeLabel = isCustom ? "Кастомный заказ" : item.input.type;
+      const size = isCustom ? "" : `${item.input.length} x ${item.input.width} x ${item.input.height} см`;
       const fabricText = item.input.fabricName ? `<br><span class="muted-cell">Ткань: ${escapeHtml(item.input.fabricName)}</span>` : "";
       return `
         <tr data-other-unit-cost="${(item.finalCost - item.sewingTotal - item.assemblyTotal) / Math.max(1, number(item.input.quantity, 1))}">
-          <td><input class="table-input" type="text" value="${escapeHtml(item.positionName || positionLabel(index))}" data-order-edit="${index}" data-field="positionName"><br><span class="muted-cell">${escapeHtml(item.input.type)}</span>${fabricText}</td>
+          <td><input class="table-input" type="text" value="${escapeHtml(item.positionName || positionLabel(index))}" data-order-edit="${index}" data-field="positionName"><br><span class="muted-cell">${escapeHtml(typeLabel)}</span>${fabricText}</td>
           <td>
-            <div class="size-inputs">
+            ${isCustom ? `<span class="muted-cell">Ручной расчёт</span>` : `<div class="size-inputs">
               <input class="table-input" type="number" min="0" step="0.1" value="${item.input.length}" data-order-edit="${index}" data-field="length" aria-label="Длина">
               <input class="table-input" type="number" min="0" step="0.1" value="${item.input.width}" data-order-edit="${index}" data-field="width" aria-label="Ширина">
               <input class="table-input" type="number" min="0" step="0.1" value="${item.input.height}" data-order-edit="${index}" data-field="height" aria-label="Высота">
             </div>
-            <span class="muted-cell">${size}</span>
+            <span class="muted-cell">${size}</span>`}
           </td>
           <td class="numeric"><input class="table-input numeric-input" type="number" min="1" step="1" value="${item.input.quantity}" data-order-edit="${index}" data-field="quantity"></td>
           <td class="numeric"><input class="table-input numeric-input" type="number" min="0" step="1" value="${Math.round(item.sewingPrice)}" data-order-edit="${index}" data-field="sewingPrice"></td>
@@ -2851,7 +2869,14 @@ document.querySelectorAll(".tab").forEach((tab) => {
   });
 });
 
-els.form.addEventListener("input", renderLive);
+els.form.addEventListener("input", (event) => {
+  syncCustomOrderInputs(event.target);
+  renderLive();
+});
+els.form.addEventListener("change", (event) => {
+  syncCustomOrderInputs(event.target);
+  renderLive();
+});
 els.pillowType.addEventListener("change", () => {
   els.materialLogistics.value = defaultMaterialLogistics(els.pillowType.value);
   renderLive();
