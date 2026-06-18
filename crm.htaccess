@@ -6,8 +6,14 @@ DirectoryIndex index.html
 
 <IfModule mod_rewrite.c>
   RewriteEngine On
+  RewriteRule ^api/csrf$ api.py?action=csrf [L,QSA]
+  RewriteRule ^api/elba/status$ api.py?action=elba-status [L,QSA]
+  RewriteRule ^api/elba/bills$ api.py?action=elba-bills [L,QSA]
+  RewriteRule ^api/elba/bills/status$ api.py?action=elba-bills-status [L,QSA]
+  RewriteRule ^api/elba/bills/pdf$ api.py?action=elba-bills-pdf [L,QSA]
+  RewriteRule ^api/elba/closing-documents$ api.py?action=elba-closing-documents [L,QSA]
   RewriteRule ^api/(proposal|company-card|rental|state)$ api.py?action=$1 [L,QSA]
-  RewriteRule ^(server|avito_telegram_bridge)\.py$ - [F,L]
+  RewriteRule ^(server|avito_telegram_bridge|db_store|elba_client|elba_mapper|elba_service)\.py$ - [F,L]
 </IfModule>
 
 Options +ExecCGI

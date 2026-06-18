@@ -1489,6 +1489,7 @@ async function handleElbaAction(historyIndex, action, button) {
     item.elbaDocuments.bill = { ...(item.elbaDocuments.bill || {}), errorMessage: error.message };
     save("pillowCalcHistory", history);
     renderHistory();
+    alert(`Эльба: ${error.message}`);
   } finally {
     if (button) {
       button.disabled = false;

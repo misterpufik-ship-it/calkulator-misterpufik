@@ -905,6 +905,8 @@ th.numeric {
 .elba-menu {
   position: relative;
   display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .elba-menu summary {
@@ -931,16 +933,18 @@ th.numeric {
 }
 
 .elba-menu-list {
-  position: absolute;
-  right: 0;
-  top: calc(100% + 6px);
-  z-index: 20;
+  display: none;
+  position: static;
   min-width: 170px;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: white;
-  box-shadow: 0 12px 28px rgba(35, 54, 43, 0.14);
-  padding: 6px;
+  box-shadow: none;
+  padding: 0;
+}
+
+.elba-menu[open] .elba-menu-list {
+  display: inline-flex;
 }
 
 .elba-menu-list button {
@@ -1480,14 +1484,14 @@ th.numeric {
 
   .check {
     min-width: 0;
-    min-height: 44px;
+    min-height: 30px;
+    height: 30px;
     gap: 7px;
-    border: 1px solid #d8e2d5;
-    border-radius: 8px;
-    padding: 7px 8px;
-    background: #fff;
+    border: 0;
+    padding: 0;
+    background: transparent;
     font-size: 12px;
-    line-height: 1.2;
+    line-height: 30px;
   }
 
   .check input {
