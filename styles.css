@@ -334,24 +334,27 @@ legend {
 }
 
 .check {
+  --switch-width: 3.3em;
+  --switch-height: 1.85em;
+  --switch-knob: 1.35em;
+  --switch-inset: 0.25em;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  min-height: 30px;
-  height: 30px;
+  min-height: var(--switch-height);
   color: var(--text);
   cursor: pointer;
-  line-height: 30px;
+  line-height: 1.25;
 }
 
 .check input {
   position: relative;
-  flex: 0 0 68px;
-  width: 68px;
-  min-width: 68px;
-  min-height: 34px;
-  height: 34px;
+  flex: 0 0 var(--switch-width);
+  width: var(--switch-width);
+  min-width: var(--switch-width);
+  min-height: var(--switch-height);
+  height: var(--switch-height);
   margin: 0;
   order: 2;
   border: 0;
@@ -359,16 +362,17 @@ legend {
   appearance: none;
   background: #9f9f9d;
   cursor: pointer;
+  font-size: inherit;
   transition: background-color 0.18s ease, box-shadow 0.18s ease;
 }
 
 .check input::before {
   content: "";
   position: absolute;
-  top: 4px;
-  left: 4px;
-  width: 26px;
-  height: 26px;
+  top: var(--switch-inset);
+  left: var(--switch-inset);
+  width: var(--switch-knob);
+  height: var(--switch-knob);
   border-radius: 50%;
   background: #ffffff;
   box-shadow: 0 2px 6px rgba(36, 60, 50, 0.22);
@@ -380,7 +384,7 @@ legend {
 }
 
 .check input:checked::before {
-  transform: translateX(34px);
+  transform: translateX(calc(var(--switch-width) - var(--switch-knob) - var(--switch-inset) - var(--switch-inset)));
 }
 
 .check input:focus-visible {
@@ -1484,30 +1488,13 @@ th.numeric {
 
   .check {
     min-width: 0;
-    min-height: 30px;
-    height: 30px;
+    min-height: var(--switch-height);
     gap: 7px;
     border: 0;
     padding: 0;
     background: transparent;
     font-size: 12px;
-    line-height: 30px;
-  }
-
-  .check input {
-    flex: 0 0 68px;
-    width: 68px;
-    height: 34px;
-    min-height: 34px;
-  }
-
-  .check input::before {
-    width: 26px;
-    height: 26px;
-  }
-
-  .check input:checked::before {
-    transform: translateX(34px);
+    line-height: 1.25;
   }
 
   .actions,
