@@ -347,11 +347,11 @@ legend {
 
 .check input {
   position: relative;
-  flex: 0 0 52px;
-  width: 52px;
-  min-width: 52px;
-  min-height: 30px;
-  height: 30px;
+  flex: 0 0 68px;
+  width: 68px;
+  min-width: 68px;
+  min-height: 34px;
+  height: 34px;
   margin: 0;
   order: 2;
   border: 0;
@@ -367,8 +367,8 @@ legend {
   position: absolute;
   top: 4px;
   left: 4px;
-  width: 22px;
-  height: 22px;
+  width: 26px;
+  height: 26px;
   border-radius: 50%;
   background: #ffffff;
   box-shadow: 0 2px 6px rgba(36, 60, 50, 0.22);
@@ -380,7 +380,7 @@ legend {
 }
 
 .check input:checked::before {
-  transform: translateX(22px);
+  transform: translateX(34px);
 }
 
 .check input:focus-visible {
@@ -1495,19 +1495,19 @@ th.numeric {
   }
 
   .check input {
-    flex: 0 0 52px;
-    width: 52px;
-    height: 30px;
-    min-height: 30px;
+    flex: 0 0 68px;
+    width: 68px;
+    height: 34px;
+    min-height: 34px;
   }
 
   .check input::before {
-    width: 22px;
-    height: 22px;
+    width: 26px;
+    height: 26px;
   }
 
   .check input:checked::before {
-    transform: translateX(22px);
+    transform: translateX(34px);
   }
 
   .actions,
