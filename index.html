@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="robots" content="noindex,nofollow,noarchive" />
     <title>AI-CRM система Misterpufik</title>
-    <link rel="stylesheet" href="styles.css?v=elba-fix-20260619-0228" />
+    <link rel="stylesheet" href="styles.css?v=elba-reqs-20260619-1315" />
   </head>
   <body>
     <main class="app">
@@ -50,15 +50,15 @@
               </label>
               <label class="calc-small-field auto-calc-field">
                 Длина, см
-                <input id="length" type="number" min="1" step="0.1" value="49" required />
+                <input id="length" type="number" min="0" step="0.1" value="0" required />
               </label>
               <label class="calc-small-field auto-calc-field">
                 Ширина, см
-                <input id="width" type="number" min="1" step="0.1" value="49" required />
+                <input id="width" type="number" min="0" step="0.1" value="0" required />
               </label>
               <label class="calc-small-field auto-calc-field">
                 Высота, см
-                <input id="height" type="number" min="1" step="0.1" value="5" required />
+                <input id="height" type="number" min="0" step="0.1" value="0" required />
               </label>
               <label class="calc-small-field auto-calc-field">
                 Количество
@@ -87,10 +87,6 @@
                   <option value="cash">Наличка</option>
                   <option value="cashless" selected>Безнал</option>
                 </select>
-              </label>
-              <label class="calc-logistics-field auto-calc-field">
-                Логистика материала, ₽
-                <input id="materialLogistics" type="number" min="0" step="1" value="1000" />
               </label>
               <label class="calc-fabric-name-field auto-calc-field">
                 Ткань
@@ -195,6 +191,10 @@
             <label>
               Стоимость доставки, ₽
               <input id="deliveryAmount" type="number" min="0" step="1" value="0" />
+            </label>
+            <label class="order-logistics-field">
+              Логистика материала, ₽
+              <input id="materialLogistics" type="number" min="0" step="1" value="2000" />
             </label>
           </div>
           <div class="table-wrap">
@@ -492,14 +492,13 @@
               <div><span>Суток</span><strong id="rentalLiveDays">1</strong></div>
               <div><span>Аренда</span><strong id="rentalLiveSubtotal">0 ₽</strong></div>
               <div><span>Доставка</span><strong id="rentalLiveDelivery">0 ₽</strong></div>
-              <div><span>Прибыль</span><strong id="rentalLiveProfit">0 ₽</strong></div>
+              <div><span>Наша прибыль</span><strong id="rentalLiveProfit">0 ₽</strong></div>
               <div><span>Итого</span><strong id="rentalLiveTotal">0 ₽</strong></div>
               <div><span>Кому оплата</span><strong id="rentalLivePaymentTo">Диме</strong></div>
             </div>
           </form>
-        </div>
 
-        <section class="panel order-panel">
+          <section class="panel order-panel rental-current-order">
           <div class="section-title">
             <h2>Заказ аренды</h2>
             <button class="danger" type="button" id="clearRentalOrder">Очистить заказ</button>
@@ -518,7 +517,7 @@
                   <th>Доставка</th>
                   <th>Монтаж</th>
                   <th>Финальная цена</th>
-                  <th>Прибыль</th>
+                  <th>Наша прибыль</th>
                   <th></th>
                 </tr>
               </thead>
@@ -531,12 +530,13 @@
             <div><span>Доставка</span><strong id="rentalOrderDelivery">0 ₽</strong></div>
             <div><span>Монтаж</span><strong id="rentalOrderMounting">0 ₽</strong></div>
             <div><span>Сумма</span><strong id="rentalOrderTotal">0 ₽</strong></div>
-            <div><span>Прибыль</span><strong id="rentalOrderProfit">0 ₽</strong></div>
+            <div><span>Наша прибыль</span><strong id="rentalOrderProfit">0 ₽</strong></div>
           </div>
           <div class="actions">
             <button class="primary" type="button" id="sendRentalOrder">Сохранить заказ</button>
           </div>
-        </section>
+          </section>
+        </div>
 
         <section class="panel order-panel">
           <div class="section-title">
@@ -727,6 +727,6 @@
       </div>
     </div>
 
-    <script src="app.js?v=elba-fix-20260619-0228"></script>
+    <script src="app.js?v=elba-reqs-20260619-1315"></script>
   </body>
 </html>

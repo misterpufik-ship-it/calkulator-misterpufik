@@ -18,7 +18,6 @@
   --soft: #f2f6f1;
   --shadow: 0 14px 34px rgba(36, 60, 50, 0.12);
 }
-
 * {
   box-sizing: border-box;
 }
@@ -347,9 +346,9 @@ legend {
 
 .check input {
   position: relative;
-  flex: 0 0 48px;
-  width: 48px;
-  min-width: 48px;
+  flex: 0 0 36px;
+  width: 36px;
+  min-width: 36px;
   min-height: 24px;
   height: 24px;
   margin: 0;
@@ -380,7 +379,7 @@ legend {
 }
 
 .check input:checked::before {
-  transform: translateX(24px);
+  transform: translateX(12px);
 }
 
 .check input:focus-visible {
@@ -621,9 +620,13 @@ button {
 
 .order-meta {
   display: grid;
-  grid-template-columns: 1.2fr 1fr 1fr 0.8fr;
+  grid-template-columns: minmax(150px, 0.75fr) minmax(180px, 1fr) minmax(240px, 1.1fr) minmax(150px, 0.8fr) minmax(150px, 0.8fr) minmax(150px, 0.8fr);
   gap: 14px;
   margin-bottom: 16px;
+}
+
+.order-meta .wide {
+  grid-column: span 2;
 }
 
 .table-wrap {
@@ -867,9 +870,11 @@ th.numeric {
 }
 
 .history-main-row td:nth-child(4) {
-  max-width: 260px;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  width: 170px;
+  max-width: 170px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.25;
 }
 
 .history-toolbar {
@@ -893,6 +898,91 @@ th.numeric {
   gap: 6px;
   align-items: center;
   white-space: nowrap;
+  overflow: visible;
+}
+
+.document-menu {
+  position: relative;
+  display: inline-flex;
+  overflow: visible;
+}
+
+.document-menu summary {
+  list-style: none;
+  min-height: 36px;
+  border: 1px solid #9faf9f;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  background: white;
+  color: var(--accent-dark);
+  cursor: pointer;
+  font-weight: 800;
+}
+
+.document-menu summary::after {
+  content: "⌄";
+  font-size: 13px;
+  line-height: 1;
+}
+
+.document-menu summary::-webkit-details-marker {
+  display: none;
+}
+
+.document-menu[open] summary {
+  background: var(--accent-soft);
+}
+
+.document-menu-list {
+  display: none;
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 25;
+  min-width: 110px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: white;
+  box-shadow: var(--shadow);
+  padding: 4px;
+}
+
+.document-menu[open] .document-menu-list {
+  display: grid;
+  gap: 4px;
+}
+
+.document-option {
+  position: relative;
+  display: block;
+  min-height: 38px;
+  border-radius: 6px;
+  padding: 8px 34px 8px 10px;
+  color: var(--accent-dark);
+  text-align: left;
+  text-decoration: none;
+  font-weight: 700;
+}
+
+.document-option:hover {
+  background: var(--accent-soft);
+}
+
+.document-option::before {
+  position: absolute;
+  right: 6px;
+  bottom: 5px;
+  min-width: 22px;
+  height: 16px;
+  border-radius: 4px;
+  color: white;
+  font-size: 8px;
+  font-weight: 900;
+  line-height: 16px;
+  text-align: center;
 }
 
 .history-row-actions {
@@ -907,6 +997,7 @@ th.numeric {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  overflow: visible;
 }
 
 .elba-menu summary {
@@ -924,6 +1015,12 @@ th.numeric {
   font-weight: 900;
 }
 
+.elba-menu summary img {
+  width: 24px;
+  height: 24px;
+  display: block;
+}
+
 .elba-menu summary::-webkit-details-marker {
   display: none;
 }
@@ -934,17 +1031,22 @@ th.numeric {
 
 .elba-menu-list {
   display: none;
-  position: static;
-  min-width: 170px;
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 20;
+  width: max-content;
+  min-width: 160px;
+  max-width: 220px;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: white;
-  box-shadow: none;
-  padding: 0;
+  box-shadow: var(--shadow);
+  padding: 4px;
 }
 
 .elba-menu[open] .elba-menu-list {
-  display: inline-flex;
+  display: block;
 }
 
 .elba-menu-list button {
@@ -954,6 +1056,8 @@ th.numeric {
   border: 0;
   background: transparent;
   padding: 8px 10px;
+  white-space: normal;
+  text-align: left;
 }
 
 .elba-menu-list button:hover {
@@ -1065,11 +1169,16 @@ th.numeric {
 }
 
 #rental .workspace {
-  grid-template-columns: minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1.1fr) minmax(420px, 0.9fr);
+  align-items: start;
 }
 
 #rental .form-panel {
   width: 100%;
+}
+
+#rental .rental-current-order {
+  margin-top: 0;
 }
 
 .rental-color-box {
@@ -1104,7 +1213,7 @@ th.numeric {
 
 .rental-live-totals {
   margin-top: 14px;
-  grid-template-columns: repeat(6, minmax(120px, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
 }
 
 .rental-price-table {
@@ -1113,6 +1222,22 @@ th.numeric {
 
 .rental-price-table table {
   min-width: 420px;
+}
+
+@media (min-width: 981px) {
+  #rental .order-panel .totals {
+    grid-template-columns: minmax(120px, 0.8fr) minmax(280px, 1.5fr) repeat(4, minmax(104px, 1fr));
+  }
+
+  #rentalOrderColorSummary,
+  #rental .totals strong,
+  #rental .totals span {
+    white-space: nowrap;
+  }
+
+  #rentalOrderColorSummary {
+    font-size: 18px;
+  }
 }
 
 .beanbag-form {
@@ -1326,6 +1451,7 @@ th.numeric {
 @media (max-width: 980px) {
   .workspace,
   #calculator .workspace,
+  #rental .workspace,
   .settings-grid {
     grid-template-columns: 1fr;
   }
@@ -1423,7 +1549,8 @@ th.numeric {
   }
 
   .calc-type-field,
-  .calc-fabric-name-field {
+  .calc-fabric-name-field,
+  .order-meta .wide {
     grid-column: auto;
   }
 
@@ -1495,8 +1622,8 @@ th.numeric {
   }
 
   .check input {
-    flex: 0 0 48px;
-    width: 48px;
+    flex: 0 0 36px;
+    width: 36px;
     height: 24px;
     min-height: 24px;
   }
@@ -1507,7 +1634,7 @@ th.numeric {
   }
 
   .check input:checked::before {
-    transform: translateX(24px);
+    transform: translateX(12px);
   }
 
   .actions,

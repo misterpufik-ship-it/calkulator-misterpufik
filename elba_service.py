@@ -85,7 +85,7 @@ class ElbaService:
 
     def _find_or_create_counterparty(self, client: ElbaClient, order: dict[str, Any]) -> dict[str, Any]:
         payload = self.mapper.order_to_counterparty(order)
-        query = payload.get("inn") or payload["name"]
+        query = payload.get("Inn") or payload["Name"]
         existing = client.find_counterparty(str(query))
         return existing or client.create_counterparty(payload)
 

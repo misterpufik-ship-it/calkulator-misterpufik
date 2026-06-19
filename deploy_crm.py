@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 from datetime import datetime
 from ftplib import FTP
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 
 ROOT = Path(__file__).resolve().parent
@@ -18,6 +18,7 @@ FILES = [
     "elba_mapper.py",
     "elba_service.py",
     "crm.htaccess",
+    "assets/kontur-elba.svg",
 ]
 
 
@@ -68,6 +69,8 @@ def main() -> None:
         for name in files:
             remote_path = f"{remote_dir}/{name}"
             backup_path = f"{backup_dir}/{name}"
+            ensure_remote_dir(ftp, str(PurePosixPath(remote_path).parent))
+            ensure_remote_dir(ftp, str(PurePosixPath(backup_path).parent))
             try:
                 with (ROOT / "backups" / f"remote-{name}.tmp").open("wb") as backup_file:
                     ftp.retrbinary(f"RETR {remote_path}", backup_file.write)

@@ -54,6 +54,11 @@ class ElbaClient:
             url = f"{url}?{urllib.parse.urlencode(params, doseq=True)}"
         return url
 
+    def _organization_path(self, path: str) -> str:
+        if not self.organization_id:
+            raise ElbaConfigError("Не указан ELBA_ORGANIZATION_ID в .env.")
+        return f"/organizations/{self.organization_id}/{path.lstrip('/')}"
+
     def request(
         self,
         method: str,
@@ -103,6 +108,19 @@ class ElbaClient:
 
     def _message_from_error(self, status: int, details: Any) -> str:
         if isinstance(details, dict):
+            error = details.get("error")
+            if isinstance(error, dict):
+                nested_details = error.get("details")
+                if isinstance(nested_details, list) and nested_details:
+                    messages = [str(item.get("message")) for item in nested_details if isinstance(item, dict) and item.get("message")]
+                    if messages:
+                        return "; ".join(messages)
+                return str(error.get("message") or error.get("code") or f"Эльба вернула ошибку {status}.")
+            details_list = details.get("details")
+            if isinstance(details_list, list) and details_list:
+                messages = [str(item.get("message")) for item in details_list if isinstance(item, dict) and item.get("message")]
+                if messages:
+                    return "; ".join(messages)
             return str(details.get("message") or details.get("error") or f"Эльба вернула ошибку {status}.")
         if details:
             return f"Эльба вернула ошибку {status}: {details}"
@@ -112,37 +130,58 @@ class ElbaClient:
         return {"organization": self.get_organization()}
 
     def get_organization(self) -> dict[str, Any]:
-        if self.organization_id:
-            return self.request("GET", f"/organizations/{self.organization_id}")
         result = self.request("GET", "/organizations")
+        organizations = result if isinstance(result, list) else None
+        if isinstance(result, dict):
+            organizations = result.get("items") or result.get("organizations")
+        if self.organization_id and isinstance(organizations, list):
+            for organization in organizations:
+                if not isinstance(organization, dict):
+                    continue
+                organization_id = str(organization.get("id") or organization.get("organizationId") or "")
+                if organization_id == self.organization_id:
+                    return organization
+            raise ElbaError("Эльба не вернула организацию с ELBA_ORGANIZATION_ID.", 404, result)
         if isinstance(result, list) and result:
             return result[0]
         if isinstance(result, dict):
-            organizations = result.get("items") or result.get("organizations")
             if isinstance(organizations, list) and organizations:
                 return organizations[0]
         return result
 
     def find_counterparty(self, query: str) -> dict[str, Any] | None:
-        result = self.request("GET", "/contractors", params={"organizationId": self.organization_id, "query": query})
-        if isinstance(result, list):
-            return result[0] if result else None
-        items = result.get("items") or result.get("contractors") if isinstance(result, dict) else None
-        return items[0] if items else None
+        result = self.request("POST", self._organization_path("/contractors/search"), payload={})
+        items = result if isinstance(result, list) else result.get("contractors") if isinstance(result, dict) else None
+        if not isinstance(items, list):
+            return None
+        needle = str(query or "").strip().lower()
+        if not needle:
+            return items[0] if items else None
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            values = (
+                item.get("inn"),
+                item.get("name"),
+                item.get("shortName"),
+            )
+            if any(needle == str(value or "").strip().lower() for value in values):
+                return item
+        return None
 
     def create_counterparty(self, payload: dict[str, Any]) -> dict[str, Any]:
-        return self.request("POST", "/contractors", params={"organizationId": self.organization_id}, payload=payload)
+        return self.request("POST", self._organization_path("/contractors"), payload=payload)
 
     def create_outgoing_bill(self, payload: dict[str, Any]) -> dict[str, Any]:
-        return self.request("POST", "/documents/outgoing-bills", params={"organizationId": self.organization_id}, payload=payload)
+        return self.request("POST", self._organization_path("/bills"), payload=payload)
 
     def get_document(self, document_id: str) -> dict[str, Any]:
-        return self.request("GET", f"/documents/{document_id}", params={"organizationId": self.organization_id})
+        return self.request("GET", self._organization_path(f"/bills/{document_id}"))
 
     def download_document_pdf(self, document_id: str, *, with_stamp: bool = True) -> bytes:
         return self.request(
             "GET",
-            f"/documents/{document_id}/print",
-            params={"organizationId": self.organization_id, "withStamp": str(with_stamp).lower(), "withSignature": str(with_stamp).lower()},
+            self._organization_path(f"/bills/{document_id}/print"),
+            params={"withStamp": str(with_stamp).lower(), "withSignature": str(with_stamp).lower()},
             accept_pdf=True,
         )
